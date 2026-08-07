@@ -49,12 +49,8 @@
     .submit-panel { display: flex; flex-wrap: wrap; align-items: center; gap: 20px; }
     .submit { padding: 18px 28px; border: 0; color: #fff; background: var(--blue); font-weight: 800; cursor: pointer; transition: opacity .2s, background .2s; }
     .submit:disabled { background: #aeb7dd; cursor: not-allowed; }
-    .submit:focus-visible, .access-code:focus-visible { outline: 3px solid rgb(24 71 255 / 20%); outline-offset: 3px; }
+    .submit:focus-visible { outline: 3px solid rgb(24 71 255 / 20%); outline-offset: 3px; }
     .submit-note { max-width: 560px; color: var(--gray-dark); font-size: 14px; line-height: 1.6; }
-    .access-wrap { width: min(320px, 100%); }
-    .access-wrap span { display:block; margin-bottom:8px; color:var(--gray-dark); font-size:12px; }
-    .access-code { width:100%; padding:15px 16px; border:1px solid var(--line); border-radius:0; outline:none; }
-    .access-code:focus { border-color:var(--blue); }
     .pipeline { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-top: 38px; }
     .stage { position:relative; padding: 16px; border: 1px solid var(--line); color: var(--gray-dark); font-size: 13px; line-height: 1.5; transition:border-color .25s, color .25s, background .25s; }
     .stage b { display: block; margin-bottom: 9px; color: var(--blue); }
@@ -135,7 +131,7 @@
 
       <section class="submit-area">
         <div class="section-label"><span class="section-number">04</span><h2>开始评测</h2></div>
-        <div><div class="submit-panel"><label class="access-wrap"><span>Beta 访问码</span><input class="access-code" id="accessCode" type="password" autocomplete="current-password" placeholder="输入访问码"></label><button class="submit" id="evaluateButton" type="button" disabled>开始 EssayFlow 评测</button><p class="submit-note">服务端会真实串行执行四个阶段，通常需要几十秒。请保持页面开启。</p></div><div class="pipeline" aria-label="四阶段评测流程" aria-live="polite"><div class="stage" data-stage="1"><b>01</b>原文既定事实</div><div class="stage" data-stage="2"><b>02</b>线索与主题</div><div class="stage" data-stage="3"><b>03</b>逐条事实核对</div><div class="stage" data-stage="4"><b>04</b>四项判档</div></div><div class="evaluation-error" id="evaluationError" role="alert" aria-live="assertive" hidden></div></div>
+        <div><div class="submit-panel"><button class="submit" id="evaluateButton" type="button" disabled>开始 EssayFlow 评测</button><p class="submit-note">服务端会真实串行执行四个阶段，通常需要几十秒。每个网络地址每小时可评测 3 次。</p></div><div class="pipeline" aria-label="四阶段评测流程" aria-live="polite"><div class="stage" data-stage="1"><b>01</b>原文既定事实</div><div class="stage" data-stage="2"><b>02</b>线索与主题</div><div class="stage" data-stage="3"><b>03</b>逐条事实核对</div><div class="stage" data-stage="4"><b>04</b>四项判档</div></div><div class="evaluation-error" id="evaluationError" role="alert" aria-live="assertive" hidden></div></div>
       </section>
     </form>
 
@@ -151,21 +147,18 @@
   <script>
     const fields = [...document.querySelectorAll('[data-draft]')];
     const state = document.getElementById('localState');
-    const accessCode = document.getElementById('accessCode');
     const evaluateButton = document.getElementById('evaluateButton');
     const evaluationError = document.getElementById('evaluationError');
     const resultSection = document.getElementById('resultSection');
     const resultWaiting = document.getElementById('resultWaiting');
     const resultContent = document.getElementById('resultContent');
     const storageKey = 'essayflow-local-draft-v1';
-    const accessStorageKey = 'essayflow-beta-code';
     const EVALUATION_API_URL = window.ESSAYFLOW_API_URL || '/api/v6/evaluate';
     let saveTimer;
     try {
       const saved = JSON.parse(localStorage.getItem(storageKey) || '{}');
       fields.forEach((field) => { if (saved[field.name]) field.value = saved[field.name]; });
     } catch (error) {}
-    try { accessCode.value = sessionStorage.getItem(accessStorageKey) || ''; } catch (error) {}
 
     function countWords(value) { return (value.trim().match(/[A-Za-z]+(?:['’-][A-Za-z]+)*/g) || []).length; }
     function updateCounts() {
@@ -182,7 +175,7 @@
       saveTimer = setTimeout(() => state.classList.remove('show'), 1200);
     }
     function formReady() {
-      return fields.every((field) => field.value.trim().length >= 5) && accessCode.value.trim().length > 0;
+      return fields.every((field) => field.value.trim().length >= 5);
     }
     function updateSubmitState() { evaluateButton.disabled = !formReady(); }
     function resetStages() {
@@ -196,7 +189,6 @@
     }
     function setBusy(busy) {
       fields.forEach((field) => { field.disabled = busy; });
-      accessCode.disabled = busy;
       evaluateButton.disabled = busy || !formReady();
       evaluateButton.textContent = busy ? 'EssayFlow 正在评测' : '开始 EssayFlow 评测';
     }
@@ -261,13 +253,12 @@
       resultContent.hidden = true;
       resultWaiting.hidden = false;
       resetStages();
-      try { sessionStorage.setItem(accessStorageKey, accessCode.value.trim()); } catch (error) {}
       setBusy(true);
       try {
         const values = Object.fromEntries(fields.map((field) => [field.name, field.value.trim()]));
         const response = await fetch(EVALUATION_API_URL, {
           method: 'POST',
-          headers: { 'content-type': 'application/json', 'x-essayflow-access-code': accessCode.value.trim() },
+          headers: { 'content-type': 'application/json' },
           body: JSON.stringify({ sourceText: values.source, starter1: values.starter1, studentParagraph1: values.p1, starter2: values.starter2, studentParagraph2: values.p2 })
         });
         if (!response.ok) {
@@ -289,7 +280,6 @@
       }
     }
     fields.forEach((field) => field.addEventListener('input', () => { updateCounts(); saveDraft(); updateSubmitState(); }));
-    accessCode.addEventListener('input', updateSubmitState);
     evaluateButton.addEventListener('click', evaluateEssay);
     updateCounts();
     updateSubmitState();

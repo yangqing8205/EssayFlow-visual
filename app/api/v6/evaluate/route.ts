@@ -4,7 +4,6 @@ import {
   allowedOrigin,
   consumeIpAllowance,
   corsHeaders,
-  requireAccessCode,
 } from "@/lib/security/evaluation-access";
 import { V6PostcheckError } from "@/lib/scoring/postcheck";
 import { runV6Pipeline } from "@/lib/workflow/v6/run";
@@ -45,7 +44,6 @@ export function createV6EvaluateHandler(dependencies: HandlerDependencies = {}) 
     let origin: string | undefined;
     try {
       origin = allowedOrigin(request, env);
-      requireAccessCode(request, env);
       consumeIpAllowance(request, env, now());
     } catch (error) {
       if (error instanceof EvaluationAccessError) return jsonError(error, origin);

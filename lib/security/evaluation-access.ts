@@ -1,5 +1,3 @@
-import { timingSafeEqual } from "node:crypto";
-
 type EvaluationEnv = Record<string, string | undefined>;
 type Bucket = { count: number; resetAt: number };
 
@@ -19,36 +17,21 @@ export function clearEvaluationBuckets() {
 
 export function allowedOrigin(request: Request, env: EvaluationEnv) {
   const origin = request.headers.get("origin") ?? "";
+  const requestOrigin = new URL(request.url).origin;
   const allowlist = (env.ESSAYFLOW_ALLOWED_ORIGINS ?? "")
     .split(",")
     .map(value => value.trim())
     .filter(Boolean);
-  if (!origin || !allowlist.includes(origin)) {
+  if (!origin || (origin !== requestOrigin && !allowlist.includes(origin))) {
     throw new EvaluationAccessError(403, "ORIGIN_FORBIDDEN", "当前网页来源未获准使用评测服务");
   }
   return origin;
 }
 
-function secureEqual(received: string, expected: string) {
-  const left = Buffer.from(received);
-  const right = Buffer.from(expected);
-  return left.length === right.length && timingSafeEqual(left, right);
-}
-
-export function requireAccessCode(request: Request, env: EvaluationEnv) {
-  const expected = env.EVALUATION_ACCESS_CODE?.trim();
-  if (!expected) {
-    throw new EvaluationAccessError(503, "ACCESS_NOT_CONFIGURED", "评测服务尚未配置访问保护");
-  }
-  const received = request.headers.get("x-essayflow-access-code") ?? "";
-  if (!secureEqual(received, expected)) {
-    throw new EvaluationAccessError(401, "UNAUTHORIZED", "访问码不正确");
-  }
-}
-
 export function consumeIpAllowance(request: Request, env: EvaluationEnv, now = Date.now()) {
   const ip = (request.headers.get("x-forwarded-for") ?? "unknown").split(",")[0].trim();
-  const limit = Math.max(1, Number.parseInt(env.EVALUATION_RATE_LIMIT_PER_HOUR ?? "10", 10) || 10);
+  const configuredLimit = Number.parseInt(env.EVALUATION_RATE_LIMIT_PER_HOUR ?? "3", 10) || 3;
+  const limit = Math.min(3, Math.max(1, configuredLimit));
   const current = buckets.get(ip);
   const bucket = !current || current.resetAt <= now ? { count: 0, resetAt: now + HOUR_MS } : current;
   if (bucket.count >= limit) {
@@ -62,8 +45,7 @@ export function corsHeaders(origin: string) {
   return {
     "access-control-allow-origin": origin,
     "access-control-allow-methods": "POST, OPTIONS",
-    "access-control-allow-headers": "content-type, x-essayflow-access-code",
+    "access-control-allow-headers": "content-type",
     vary: "Origin",
   };
 }
-

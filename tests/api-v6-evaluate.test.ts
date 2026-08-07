@@ -5,9 +5,8 @@ import { clearEvaluationBuckets } from "@/lib/security/evaluation-access";
 import type { V6StageEvent } from "@/lib/workflow/v6/types";
 
 const env = {
-  EVALUATION_ACCESS_CODE: "beta-secret",
   ESSAYFLOW_ALLOWED_ORIGINS: "https://essayflow-demo.yangqing8205.chatgpt.site",
-  EVALUATION_RATE_LIMIT_PER_HOUR: "10",
+  EVALUATION_RATE_LIMIT_PER_HOUR: "3",
 };
 
 const input = {
@@ -18,14 +17,17 @@ const input = {
   studentParagraph2: fixture.sample.p2,
 };
 
-function request(headers: Record<string, string> = {}, body: unknown = input) {
-  return new Request("https://essayflow-v2-yangqing.vercel.app/api/v6/evaluate", {
+function request(
+  headers: Record<string, string> = {},
+  body: unknown = input,
+  url = "https://essayflow-v2-yangqing.vercel.app/api/v6/evaluate",
+) {
+  return new Request(url, {
     method: "POST",
     headers: {
       "content-type": "application/json",
       origin: "https://essayflow-demo.yangqing8205.chatgpt.site",
       "x-forwarded-for": "203.0.113.8",
-      "x-essayflow-access-code": "beta-secret",
       ...headers,
     },
     body: JSON.stringify(body),
@@ -43,12 +45,20 @@ const successfulPipeline = async (_input: unknown, options: { onStage?: (event: 
 describe("POST /api/v6/evaluate", () => {
   beforeEach(() => clearEvaluationBuckets());
 
-  it("requires the deployed access code", async () => {
+  it("allows evaluation without a user-facing access code", async () => {
     const handler = createV6EvaluateHandler({ env, runPipeline: successfulPipeline });
-    const missing = await handler(request({ "x-essayflow-access-code": "" }));
-    expect(missing.status).toBe(401);
-    expect(missing.headers.get("access-control-allow-origin")).toBe("https://essayflow-demo.yangqing8205.chatgpt.site");
-    expect((await handler(request({ "x-essayflow-access-code": "wrong" }))).status).toBe(401);
+    expect((await handler(request())).status).toBe(200);
+  });
+
+  it("allows the deployed page to call its same-origin API", async () => {
+    const handler = createV6EvaluateHandler({ env, runPipeline: successfulPipeline });
+    const response = await handler(request(
+      { origin: "https://essayflow-scoring-service.vercel.app" },
+      input,
+      "https://essayflow-scoring-service.vercel.app/api/v6/evaluate",
+    ));
+    expect(response.status).toBe(200);
+    expect(response.headers.get("access-control-allow-origin")).toBe("https://essayflow-scoring-service.vercel.app");
   });
 
   it("rejects unlisted origins", async () => {
@@ -58,9 +68,9 @@ describe("POST /api/v6/evaluate", () => {
     expect(response.headers.get("access-control-allow-origin")).toBeNull();
   });
 
-  it("rate limits the eleventh request from one IP", async () => {
+  it("rate limits the fourth request from one IP", async () => {
     const handler = createV6EvaluateHandler({ env, runPipeline: successfulPipeline, now: () => 1_000 });
-    for (let index = 0; index < 10; index += 1) {
+    for (let index = 0; index < 3; index += 1) {
       expect((await handler(request())).status).toBe(200);
     }
     expect((await handler(request())).status).toBe(429);
