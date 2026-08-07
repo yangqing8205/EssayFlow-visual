@@ -9,9 +9,9 @@ import LandingPage from "@/app/page";
 describe("scoring service root", () => {
   beforeEach(() => redirect.mockClear());
 
-  it("does not expose the retired EssayFlow landing page", () => {
+  it("opens the blue-white evaluation page", () => {
     LandingPage();
 
-    expect(redirect).toHaveBeenCalledWith("https://essayflow-demo.yangqing8205.chatgpt.site/");
+    expect(redirect).toHaveBeenCalledWith("/essayflow-evaluate.html");
   });
 });
