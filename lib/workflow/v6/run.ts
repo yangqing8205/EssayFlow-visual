@@ -29,7 +29,7 @@ type RunV6Options = {
 const STAGE_OPTIONS: Record<1 | 2 | 3 | 4, CompletionOptions> = {
   1: { thinking: "disabled", maxCompletionTokens: 3000 },
   2: { thinking: "disabled", maxCompletionTokens: 4000 },
-  3: { thinking: "enabled", maxCompletionTokens: 5000 },
+  3: { thinking: "disabled", maxCompletionTokens: 5000 },
   4: { thinking: "disabled", maxCompletionTokens: 7000 },
 };
 
