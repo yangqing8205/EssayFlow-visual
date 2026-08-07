@@ -78,7 +78,7 @@ describe("runV6Pipeline", () => {
     expect(report.total).toBe(18);
     expect(report.modelVersion).toBe(provider.modelName);
     expect(provider.calls).toHaveLength(4);
-    expect(provider.calls.map(call => call.options.thinking)).toEqual(["disabled", "disabled", "enabled", "enabled"]);
+    expect(provider.calls.map(call => call.options.thinking)).toEqual(["disabled", "disabled", "enabled", "disabled"]);
     const originalWordCount = `${fixture.sample.p1} ${fixture.sample.p2}`.match(/[A-Za-z]+(?:['’][A-Za-z]+)?/g)?.length;
     expect(provider.calls[2].input).toMatchObject({ studentOriginalWordCount: originalWordCount });
     expect(provider.calls[3].input).toMatchObject({ studentOriginalWordCount: originalWordCount });
