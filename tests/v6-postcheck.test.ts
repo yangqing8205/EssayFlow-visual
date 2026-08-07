@@ -123,6 +123,13 @@ describe("V6 source keyword postchecks", () => {
     if (parsed.success) expect(() => assertV6SourceKeywords(parsed.data, input)).not.toThrow();
   });
 
+  it("accepts source evidence when only English letter casing differs", () => {
+    const candidate = sourceDirection();
+    candidate.sourceKeywords[3].quote = "eventually, my brother decided to leave rather than force the issue.";
+
+    expect(() => assertV6SourceKeywords(candidate, input)).not.toThrow();
+  });
+
   it("rejects missing categories, fabricated quotes, and duplicate clues", () => {
     const missing = sourceDirection();
     missing.sourceKeywords = missing.sourceKeywords.filter(item => item.category !== "constraint");

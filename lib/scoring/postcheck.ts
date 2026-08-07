@@ -17,6 +17,7 @@ export class V6PostcheckError extends Error {
 export function normalizeEvidence(value: string) {
   return value
     .normalize("NFKC")
+    .toLowerCase()
     .replace(/[“”]/g, '"')
     .replace(/[‘’]/g, "'")
     .replace(/[—–]/g, "-")
