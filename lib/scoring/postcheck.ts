@@ -48,7 +48,10 @@ export function assertV6SourceKeywords(stage2: V6Stage2, input: V6EvaluateInput)
     if (seen.has(quote)) fail("source-keyword-duplicate");
     seen.add(quote);
     const haystack = item.category === "p2Prerequisite" ? starter2 : source;
-    if (!haystack.includes(quote)) fail("source-keyword-evidence");
+    if (!haystack.includes(quote)) {
+      const diagnosticQuote = item.quote.replace(/\s+/g, " ").slice(0, 120);
+      fail(`source-keyword-evidence:${item.category}:${diagnosticQuote}`);
+    }
   }
 }
 

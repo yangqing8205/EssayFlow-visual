@@ -130,7 +130,7 @@ describe("V6 source keyword postchecks", () => {
 
     const fabricated = sourceDirection();
     fabricated.sourceKeywords[0].quote = "a storm invented by the model";
-    expect(() => assertV6SourceKeywords(fabricated, input)).toThrow(/source-keyword-evidence/);
+    expect(() => assertV6SourceKeywords(fabricated, input)).toThrow(/source-keyword-evidence:catalyst:a storm invented by the model/);
 
     const duplicate = sourceDirection();
     duplicate.sourceKeywords[1].quote = duplicate.sourceKeywords[0].quote;
