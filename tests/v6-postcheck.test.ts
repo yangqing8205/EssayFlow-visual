@@ -56,6 +56,23 @@ describe("V6 semantic postchecks", () => {
     expect(() => assertV6Report(candidate, input)).toThrow(/fifth-band-fuse/);
   });
 
+  it("keeps reports with three hard content judgements out of the fourth band", () => {
+    const candidate = report();
+    candidate.contentJudgements[0].status = "明显问题";
+    candidate.contentJudgements[2].status = "明显问题";
+    candidate.contentJudgements[3].status = "明显问题";
+
+    expect(() => assertV6Report(candidate, input)).toThrow(/fourth-band-hard-count/);
+  });
+
+  it("does not label a directionally aligned but shallow theme as a hard problem", () => {
+    const candidate = report();
+    candidate.story.themeTrajectory.continuationAlignment = "方向一致但较浅";
+    candidate.contentJudgements[2].status = "明显问题";
+
+    expect(() => assertV6Report(candidate, input)).toThrow(/theme-alignment-status/);
+  });
+
   it("rejects fabricated evidence but allows the fixture's longer evidence", () => {
     const candidate = report();
     candidate.contentJudgements[0].evidence = "a sentence that never appeared";

@@ -79,6 +79,19 @@ export function assertV6Report(report: V6FinalReport, input: V6EvaluateInput) {
     fail("fifth-band-fuse");
   }
 
+  const contentViolations: string[] = [];
+  const hardCount = report.contentJudgements.filter(item => HARD_STATUSES.has(item.status)).length;
+  if (report.band === 4 && hardCount >= 3) contentViolations.push("fourth-band-hard-count");
+  const theme = report.contentJudgements.find(item => item.key === "theme");
+  if (
+    report.story.themeTrajectory.continuationAlignment === "方向一致但较浅"
+    && theme
+    && HARD_STATUSES.has(theme.status)
+  ) {
+    contentViolations.push("theme-alignment-status");
+  }
+  if (contentViolations.length) fail(contentViolations.join(","));
+
   const keys = report.contentJudgements.map(item => item.key);
   if (keys.some((key, index) => key !== KEYS[index])) fail("content-keys");
 
