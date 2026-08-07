@@ -14,4 +14,9 @@ describe("public evaluation page", () => {
     expect(html).not.toContain("x-essayflow-access-code");
     expect(html).not.toContain("essayflow-beta-code");
   });
+
+  it("shows the safe validation diagnostic when an evaluation fails", () => {
+    expect(html).toContain("event.diagnostic");
+    expect(html).toContain("错误编号：");
+  });
 });

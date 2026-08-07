@@ -269,7 +269,10 @@
         await parseNdjson(response, (event) => {
           if (event.type === 'stage') setStage(event.stage, event.status);
           else if (event.type === 'result') { receivedResult = true; renderReport(event.data); }
-          else if (event.type === 'error') throw new Error(event.message || '评测未完成，请重试。');
+          else if (event.type === 'error') {
+            const diagnostic = event.diagnostic ? `\n错误编号：${event.diagnostic}` : '';
+            throw new Error(`${event.message || '评测未完成，请重试。'}${diagnostic}`);
+          }
           else throw new Error('评分服务返回了未知事件。');
         });
         if (!receivedResult) throw new Error('评测连接提前结束，请重试。');
