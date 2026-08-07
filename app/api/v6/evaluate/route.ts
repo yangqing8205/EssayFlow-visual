@@ -1,4 +1,4 @@
-import { ModelOutputInvalidError } from "@/lib/providers";
+import { ModelCallFailedError, ModelOutputInvalidError } from "@/lib/providers";
 import {
   EvaluationAccessError,
   allowedOrigin,
@@ -31,6 +31,24 @@ function jsonError(error: EvaluationAccessError, origin?: string) {
 function safeStreamError(error: unknown) {
   if (error instanceof ModelOutputInvalidError || error instanceof V6PostcheckError) {
     return { type: "error", code: "MODEL_FORMAT_ERROR", message: "模型结果未通过评分规则校验，请重试" };
+  }
+  if (error instanceof ModelCallFailedError) {
+    const detail = error.detail.toLowerCase();
+    if (/\b401\b|authentication|invalid api key|incorrect api key/.test(detail)) {
+      return { type: "error", code: "PROVIDER_AUTH_ERROR", message: "模型服务的 API Key 无效，请检查 Vercel 环境变量" };
+    }
+    if (/\b402\b|insufficient balance|insufficient quota|quota exceeded|余额/.test(detail)) {
+      return { type: "error", code: "PROVIDER_BALANCE_ERROR", message: "模型账户余额或额度不足，请检查 DeepSeek 控制台" };
+    }
+    if (/\b429\b|rate.?limit|too many requests/.test(detail)) {
+      return { type: "error", code: "PROVIDER_RATE_LIMIT", message: "模型服务请求过多，请稍后再试" };
+    }
+    if (/\b404\b|model.?not.?found|unknown model/.test(detail)) {
+      return { type: "error", code: "PROVIDER_MODEL_NOT_FOUND", message: "配置的模型名称不可用，请检查 OPENAI_MODEL" };
+    }
+    if (/\b400\b|invalid.?request|unknown parameter|unsupported parameter|unrecognized/.test(detail)) {
+      return { type: "error", code: "PROVIDER_REQUEST_INVALID", message: "模型请求参数与服务不兼容，请检查 DeepSeek API 配置" };
+    }
   }
   return { type: "error", code: "MODEL_UNAVAILABLE", message: "评测服务暂时不可用，请稍后重试" };
 }

@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import fixture from "@/tests/fixtures/v6-real-essay.json";
 import { createV6EvaluateHandler } from "@/app/api/v6/evaluate/route";
+import { ModelCallFailedError } from "@/lib/providers";
 import { clearEvaluationBuckets } from "@/lib/security/evaluation-access";
 import type { V6StageEvent } from "@/lib/workflow/v6/types";
 
@@ -108,5 +109,21 @@ describe("POST /api/v6/evaluate", () => {
     expect(body).not.toContain("sk-secret-value");
     expect(body).not.toContain("hidden prompt");
     expect(body).not.toContain("at ");
+  });
+
+  it("classifies provider failures without exposing provider details", async () => {
+    const handler = createV6EvaluateHandler({
+      env,
+      runPipeline: async () => {
+        throw new ModelCallFailedError("400 Unknown parameter max_completion_tokens; sk-secret-value");
+      },
+    });
+    const response = await handler(request());
+    const body = await response.text();
+
+    expect(body).toContain('"code":"PROVIDER_REQUEST_INVALID"');
+    expect(body).toContain("模型请求参数与服务不兼容");
+    expect(body).not.toContain("max_completion_tokens");
+    expect(body).not.toContain("sk-secret-value");
   });
 });
