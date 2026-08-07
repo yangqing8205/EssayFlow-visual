@@ -107,24 +107,29 @@ describe("runV6Pipeline", () => {
     expect(provider.calls[2].repairHint).toContain("source-keyword-evidence");
   });
 
-  it("repairs one semantically invalid final report", async () => {
+  it("canonicalizes deterministic score metadata without another model call", async () => {
     const invalid = structuredClone(fixture.goodReport);
     invalid.languagePlacement = "档内较高位";
-    const provider = new QueueProvider([...responses(invalid), JSON.stringify(fixture.goodReport)]);
+    invalid.band = 5;
+    invalid.bandRange = "21—25";
+    invalid.level = "第五档";
+    const provider = new QueueProvider(responses(invalid));
 
     const report = await runV6Pipeline(parsed, { providerFactory: () => provider });
 
     expect(report.languagePlacement).toBe("档内中位");
-    expect(provider.calls).toHaveLength(5);
-    expect(provider.calls[4].repairHint).toContain("score-placement");
+    expect(report.band).toBe(4);
+    expect(report.bandRange).toBe("16—20");
+    expect(report.level).toBe("第四档");
+    expect(provider.calls).toHaveLength(4);
   });
 
   it("fails after one unsuccessful repair", async () => {
     const invalid = structuredClone(fixture.goodReport);
-    invalid.languagePlacement = "档内较高位";
+    invalid.contentJudgements[0].evidence = "evidence invented by the model";
     const provider = new QueueProvider([...responses(invalid), JSON.stringify(invalid)]);
 
-    await expect(runV6Pipeline(parsed, { providerFactory: () => provider })).rejects.toThrow(/score-placement/);
+    await expect(runV6Pipeline(parsed, { providerFactory: () => provider })).rejects.toThrow(/evidence-source/);
     expect(provider.calls).toHaveLength(5);
   });
 });

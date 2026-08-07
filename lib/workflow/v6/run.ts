@@ -6,7 +6,12 @@ import {
   type LLMProvider,
   type ProviderFactory,
 } from "@/lib/providers";
-import { assertV6Report, assertV6SourceKeywords, V6PostcheckError } from "@/lib/scoring/postcheck";
+import {
+  assertV6Report,
+  assertV6SourceKeywords,
+  canonicalizeV6ScoreMetadata,
+  V6PostcheckError,
+} from "@/lib/scoring/postcheck";
 import { STAGE1_PROMPT, buildStage1Input } from "@/lib/prompts/v6/stage1";
 import { STAGE2_PROMPT, buildStage2Input } from "@/lib/prompts/v6/stage2";
 import { STAGE3_PROMPT, buildStage3Input } from "@/lib/prompts/v6/stage3";
@@ -52,6 +57,7 @@ async function requestStage<T>(
   schema: ZodType<T>,
   options: CompletionOptions,
   validate?: (value: T) => void,
+  normalize?: (value: T) => T,
 ) {
   let repairHint: string | undefined;
   let lastError: unknown;
@@ -60,8 +66,9 @@ async function requestStage<T>(
     try {
       const result = schema.safeParse(parseJson(raw));
       if (!result.success) throw new ModelOutputInvalidError(schemaDetail(result.error));
-      validate?.(result.data);
-      return result.data;
+      const value = normalize ? normalize(result.data) : result.data;
+      validate?.(value);
+      return value;
     } catch (error) {
       lastError = error;
       const detail = error instanceof V6PostcheckError
@@ -113,6 +120,7 @@ export async function runV6Pipeline(input: V6EvaluateInput, options: RunV6Option
     V6FinalReportSchema,
     STAGE_OPTIONS[4],
     report => assertV6Report(report, input),
+    canonicalizeV6ScoreMetadata,
   ));
   return { ...report, modelVersion: provider.modelName };
 }

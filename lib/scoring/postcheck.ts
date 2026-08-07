@@ -33,6 +33,17 @@ function expectedPlacement(score: number) {
   return PLACEMENTS[5 - (score % 5 || 5)];
 }
 
+export function canonicalizeV6ScoreMetadata(report: V6FinalReport): V6FinalReport {
+  const band = Math.ceil(report.total / 5);
+  return {
+    ...report,
+    band,
+    bandRange: RANGES[band],
+    level: LEVELS[band],
+    languagePlacement: expectedPlacement(report.total),
+  };
+}
+
 function evidenceFragments(evidence: string) {
   return evidence.split(/\s+\/\s+/).map(part => part.trim()).filter(Boolean);
 }
