@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import fixture from "@/tests/fixtures/v6-real-essay.json";
-import { assertV6Report } from "@/lib/scoring/postcheck";
-import { V6FinalReportSchema } from "@/lib/workflow/v6/types";
+import { assertV6Report, assertV6SourceKeywords } from "@/lib/scoring/postcheck";
+import { V6FinalReportSchema, V6Stage2Schema } from "@/lib/workflow/v6/types";
 
 const input = {
   sourceText: fixture.exam.sourceText,
@@ -81,5 +81,50 @@ describe("V6 semantic postchecks", () => {
     const candidate = report();
     candidate.contentJudgements[0].key = "theme";
     expect(() => assertV6Report(candidate, input)).toThrow(/content-keys/);
+  });
+});
+
+describe("V6 source keyword postchecks", () => {
+  function sourceDirection() {
+    return V6Stage2Schema.parse({
+      conflict: "The narrator's reasonable rule ignores his brother's emotional dependence on Toby.",
+      concreteConflicts: ["Toby cannot enter the house"],
+      foreshadowing: ["Toby was his constant companion"],
+      sourceKeywords: [
+        { category: "catalyst", quote: "It started to rain", function: "触发室外安排失效" },
+        { category: "emotion", quote: "Not a chance", function: "显示哥哥持续受伤" },
+        { category: "theme", quote: "constant companion", function: "说明 Toby 的陪伴意义" },
+        { category: "constraint", quote: "knock over", function: "说明安全顾虑" },
+        { category: "p2Prerequisite", quote: fixture.exam.starter2, function: "锁定第二段抵达门口" },
+      ],
+      themeTrajectory: {
+        initialBelief: "The narrator believes the household rule is enough.",
+        development: "He starts putting himself in his brother's shoes.",
+        cognitiveEndpoint: "He sees his brother's grief and Toby's role.",
+        cognitiveEndpointQuote: "I tried to put myself in my brother's shoes.",
+        endpointStatus: "已经形成认知终点",
+        themeSubject: "the narrator",
+        themeObject: "his brother's situation and Toby's meaning",
+        themeValue: "understanding another person's needs",
+      },
+    });
+  }
+
+  it("accepts five unique source-backed categories", () => {
+    expect(() => assertV6SourceKeywords(sourceDirection(), input)).not.toThrow();
+  });
+
+  it("rejects missing categories, fabricated quotes, and duplicate clues", () => {
+    const missing = sourceDirection();
+    missing.sourceKeywords = missing.sourceKeywords.filter(item => item.category !== "constraint");
+    expect(() => assertV6SourceKeywords(missing, input)).toThrow(/source-keyword-categories/);
+
+    const fabricated = sourceDirection();
+    fabricated.sourceKeywords[0].quote = "a storm invented by the model";
+    expect(() => assertV6SourceKeywords(fabricated, input)).toThrow(/source-keyword-evidence/);
+
+    const duplicate = sourceDirection();
+    duplicate.sourceKeywords[1].quote = duplicate.sourceKeywords[0].quote;
+    expect(() => assertV6SourceKeywords(duplicate, input)).toThrow(/source-keyword-duplicate/);
   });
 });

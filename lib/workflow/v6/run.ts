@@ -6,7 +6,7 @@ import {
   type LLMProvider,
   type ProviderFactory,
 } from "@/lib/providers";
-import { assertV6Report, V6PostcheckError } from "@/lib/scoring/postcheck";
+import { assertV6Report, assertV6SourceKeywords, V6PostcheckError } from "@/lib/scoring/postcheck";
 import { STAGE1_PROMPT, buildStage1Input } from "@/lib/prompts/v6/stage1";
 import { STAGE2_PROMPT, buildStage2Input } from "@/lib/prompts/v6/stage2";
 import { STAGE3_PROMPT, buildStage3Input } from "@/lib/prompts/v6/stage3";
@@ -97,6 +97,7 @@ export async function runV6Pipeline(input: V6EvaluateInput, options: RunV6Option
     buildStage2Input(input, stage1),
     V6Stage2Schema,
     STAGE_OPTIONS[2],
+    value => assertV6SourceKeywords(value, input),
   ));
   const stage3 = await run(3, () => requestStage(
     provider,
@@ -105,7 +106,7 @@ export async function runV6Pipeline(input: V6EvaluateInput, options: RunV6Option
     V6Stage3Schema,
     STAGE_OPTIONS[3],
   ));
-  return run(4, () => requestStage(
+  const report = await run(4, () => requestStage(
     provider,
     STAGE4_PROMPT,
     buildStage4Input(input, stage1, stage2, stage3),
@@ -113,4 +114,5 @@ export async function runV6Pipeline(input: V6EvaluateInput, options: RunV6Option
     STAGE_OPTIONS[4],
     report => assertV6Report(report, input),
   ));
+  return { ...report, modelVersion: provider.modelName };
 }

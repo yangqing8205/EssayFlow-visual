@@ -24,7 +24,10 @@ const stage2 = {
   concreteConflicts: ["Toby cannot enter the house"],
   foreshadowing: ["Toby was his constant companion"],
   sourceKeywords: [
+    { category: "catalyst", quote: "It started to rain", function: "The weather forces everyone indoors" },
+    { category: "emotion", quote: "Not a chance", function: "The brother remains hurt" },
     { category: "theme", quote: "constant companion", function: "Toby's emotional role" },
+    { category: "constraint", quote: "knock over", function: "The narrator's safety concern" },
     { category: "p2Prerequisite", quote: fixture.exam.starter2, function: "arrival at the door" },
   ],
   themeTrajectory: {
@@ -73,14 +76,35 @@ describe("runV6Pipeline", () => {
     });
 
     expect(report.total).toBe(18);
+    expect(report.modelVersion).toBe(provider.modelName);
     expect(provider.calls).toHaveLength(4);
     expect(provider.calls.map(call => call.options.thinking)).toEqual(["disabled", "disabled", "enabled", "enabled"]);
+    const originalWordCount = `${fixture.sample.p1} ${fixture.sample.p2}`.match(/[A-Za-z]+(?:['’][A-Za-z]+)?/g)?.length;
+    expect(provider.calls[2].input).toMatchObject({ studentOriginalWordCount: originalWordCount });
+    expect(provider.calls[3].input).toMatchObject({ studentOriginalWordCount: originalWordCount });
     expect(events).toEqual([
       "1:running", "1:complete",
       "2:running", "2:complete",
       "3:running", "3:complete",
       "4:running", "4:complete",
     ]);
+  });
+
+  it("repairs source keywords that fail service-side evidence checks", async () => {
+    const invalidStage2 = structuredClone(stage2);
+    invalidStage2.sourceKeywords[0].quote = "rain invented by the model";
+    const provider = new QueueProvider([
+      JSON.stringify(stage1),
+      JSON.stringify(invalidStage2),
+      JSON.stringify(stage2),
+      JSON.stringify(stage3),
+      JSON.stringify(fixture.goodReport),
+    ]);
+
+    await runV6Pipeline(parsed, { providerFactory: () => provider });
+
+    expect(provider.calls).toHaveLength(5);
+    expect(provider.calls[2].repairHint).toContain("source-keyword-evidence");
   });
 
   it("repairs one semantically invalid final report", async () => {

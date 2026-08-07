@@ -17,7 +17,9 @@ npm run dev
 
 打开 `http://localhost:3000` 是产品介绍首页，`/evaluate` 是评测工作台。
 
-真实模型接入：复制 `.env.example` 为 `.env.local`，配置 `OPENAI_API_KEY`，可选 `OPENAI_BASE_URL`（网关或兼容端点）与 `OPENAI_MODEL`（默认 `gpt-4.1-mini`）。使用自建或第三方网关时，`OPENAI_MODEL` 需填该网关自己的模型 ID，可先请求其 `/v1/models` 确认。Key 只从服务端环境变量读取，不进入前端、仓库或日志；`/api/provider-status` 只返回“是否已配置”与模型名。
+真实模型接入：复制 `.env.example` 为 `.env.local`，配置 `OPENAI_API_KEY`、`EVALUATION_ACCESS_CODE` 和 `ESSAYFLOW_ALLOWED_ORIGINS`。默认使用 DeepSeek OpenAI-compatible 地址与 `deepseek-v4-flash`，也可通过 `OPENAI_BASE_URL`、`OPENAI_MODEL` 切换兼容提供商。Key 只从服务端环境变量读取，不进入前端、仓库或日志；`/api/provider-status` 只返回“是否已配置”与模型名。
+
+作品集静态页使用 `POST /api/v6/evaluate`。该接口按 NDJSON 依次发送四阶段进度与最终报告：原文既定事实、原文线索与认知终点、学生续写事实核对、四项判档与语言定位。前两阶段不会收到学生续写；评分标准只读取 `lib/scoring/V6_RUBRIC.txt`，并由哈希测试防止意外改写。最终报告还会经过分数与档内位置、第五档熔断、逐字证据、给定首句锁定等服务端断言。
 
 未配置模型时，真实评测不会退回任何示例数据，而是返回 HTTP 503 与“当前未配置 AI 模型，暂时无法分析你的作文”，前端同时禁用提交。模型输出不符合 `FinalReport` Schema 时，系统按有限次数请求模型修复结构，仍不合规则返回 502 真实错误，绝不展示编造的报告。
 
@@ -49,8 +51,16 @@ Next.js、React、TypeScript、Tailwind CSS、Zod、Vitest、OpenAI-compatible S
 
 MVP 不含登录、支付、班级、文件上传或永久存储。真实评测必须配置 Key 才能运行，这是有意的设计：没有模型时宁可报错，也不展示任何与本次作文无关的内容。
 
-单次评测由一次模型调用产出完整报告，实测在 OpenAI-compatible 网关上耗时约 35—40 秒，前端目前只有阶段提示、没有流式输出，长等待是当前最明显的体验短板。弱模型可能需要多次结构修复才能通过 Schema。评分稳定性（同一输入多次运行的分数波动）尚未建立基线。下一步包括：完整修订差异视图、SQLite 可选本地历史、DOCX/PDF 导入、流式节点进度、真实模型 eval 基线与可访问性审计。
+V6 真实评测由四次隔离调用完成，并通过 NDJSON 实时发送阶段状态。第 1、2 阶段关闭思考模式，第 3、4 阶段开启思考模式；每阶段最多进行一次结构或语义修复。评分稳定性（同一输入多次运行的分数波动）仍需在配置真实 DeepSeek Key 后建立基线。下一步包括：完整修订差异视图、持久化限流、真实模型 eval 基线与可访问性审计。
 
 ## 部署
 
-可直接部署到支持 Next.js 的 Node 平台。构建命令 `npm run build`，启动命令 `npm start`。评测功能需要 `OPENAI_API_KEY`，只在部署平台的 Secret 管理中保存密钥；未配置时首页与示例报告仍可访问，真实评测会明确提示未配置模型。
+可直接部署到 Vercel 或其他支持 Next.js 的 Node 平台。构建命令 `npm run build`，启动命令 `npm start`。部署环境必须配置 `OPENAI_API_KEY`、`EVALUATION_ACCESS_CODE`、`ESSAYFLOW_ALLOWED_ORIGINS`；建议显式配置 `OPENAI_BASE_URL=https://api.deepseek.com` 与 `OPENAI_MODEL=deepseek-v4-flash`。访问码和模型 Key 只能保存在平台 Secret 中。
+
+静态原型页默认调用 `http://localhost:3000/api/v6/evaluate`。部署后，在加载页面前设置线上接口地址：
+
+```html
+<script>window.ESSAYFLOW_API_URL = "https://你的服务域名/api/v6/evaluate";</script>
+```
+
+接口同时强制来源白名单、访问码和按 IP 的每小时限流。当前限流存于单个函数实例内存，适合低流量 Beta，不应当被视为严格计费配额；正式开放前应换成共享存储。

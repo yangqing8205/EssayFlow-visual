@@ -1,10 +1,11 @@
-import type { V6EvaluateInput, V6FinalReport } from "@/lib/workflow/v6/types";
+import type { V6EvaluateInput, V6FinalReport, V6Stage2 } from "@/lib/workflow/v6/types";
 
 const LEVELS = ["", "第一档", "第二档", "第三档", "第四档", "第五档"] as const;
 const RANGES = ["", "1—5", "6—10", "11—15", "16—20", "21—25"] as const;
 const PLACEMENTS = ["档内最高位", "档内较高位", "档内中位", "档内较低位", "档内最低位"] as const;
 const KEYS = ["conflict", "cohesion", "theme", "plausibility"] as const;
 const HARD_STATUSES = new Set(["明显问题", "失败/硬伤"]);
+const SOURCE_KEYWORD_CATEGORIES = ["catalyst", "emotion", "theme", "constraint", "p2Prerequisite"] as const;
 
 export class V6PostcheckError extends Error {
   constructor(readonly rule: string) {
@@ -33,6 +34,22 @@ function expectedPlacement(score: number) {
 
 function evidenceFragments(evidence: string) {
   return evidence.split(/\s+\/\s+/).map(part => part.trim()).filter(Boolean);
+}
+
+export function assertV6SourceKeywords(stage2: V6Stage2, input: V6EvaluateInput) {
+  const categories = new Set(stage2.sourceKeywords.map(item => item.category));
+  if (SOURCE_KEYWORD_CATEGORIES.some(category => !categories.has(category))) fail("source-keyword-categories");
+
+  const seen = new Set<string>();
+  const source = normalizeEvidence(input.sourceText);
+  const starter2 = normalizeEvidence(input.starter2);
+  for (const item of stage2.sourceKeywords) {
+    const quote = normalizeEvidence(item.quote);
+    if (seen.has(quote)) fail("source-keyword-duplicate");
+    seen.add(quote);
+    const haystack = item.category === "p2Prerequisite" ? starter2 : source;
+    if (!haystack.includes(quote)) fail("source-keyword-evidence");
+  }
 }
 
 export function assertV6Report(report: V6FinalReport, input: V6EvaluateInput) {

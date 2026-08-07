@@ -1,4 +1,5 @@
 import { V6_RUBRIC } from "@/lib/scoring/rubric";
+import { wordCount } from "@/lib/workflow/parser";
 import type { V6EvaluateInput, V6Stage1, V6Stage2, V6Stage3 } from "@/lib/workflow/v6/types";
 
 const STAGE4_HEADER = `你正在执行 EssayFlow v6 的第四阶段：依据前三阶段已经锁定的结果，完成四项判档和语言档内定位。
@@ -21,5 +22,11 @@ export function buildStage4Input(
   stage2: V6Stage2,
   stage3: V6Stage3,
 ) {
-  return { ...input, sourceFacts: stage1, sourceDirection: stage2, continuationAudit: stage3 };
+  return {
+    ...input,
+    studentOriginalWordCount: wordCount(input.studentParagraph1) + wordCount(input.studentParagraph2),
+    sourceFacts: stage1,
+    sourceDirection: stage2,
+    continuationAudit: stage3,
+  };
 }
