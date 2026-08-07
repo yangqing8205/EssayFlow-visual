@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import fixture from "@/tests/fixtures/v6-real-essay.json";
 import { createV6EvaluateHandler } from "@/app/api/v6/evaluate/route";
 import { ModelCallFailedError } from "@/lib/providers";
+import { V6PostcheckError } from "@/lib/scoring/postcheck";
 import { clearEvaluationBuckets } from "@/lib/security/evaluation-access";
 import type { V6StageEvent } from "@/lib/workflow/v6/types";
 
@@ -125,5 +126,20 @@ describe("POST /api/v6/evaluate", () => {
     expect(body).toContain("模型请求参数与服务不兼容");
     expect(body).not.toContain("max_completion_tokens");
     expect(body).not.toContain("sk-secret-value");
+  });
+
+  it("returns a safe validation rule for production diagnostics", async () => {
+    const handler = createV6EvaluateHandler({
+      env,
+      runPipeline: async () => {
+        throw new V6PostcheckError("source-keyword-evidence");
+      },
+    });
+    const response = await handler(request());
+    const body = await response.text();
+
+    expect(body).toContain('"code":"MODEL_FORMAT_ERROR"');
+    expect(body).toContain('"diagnostic":"source-keyword-evidence"');
+    expect(body).not.toContain(fixture.exam.sourceText);
   });
 });

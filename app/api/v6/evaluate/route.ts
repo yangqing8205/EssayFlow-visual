@@ -30,7 +30,13 @@ function jsonError(error: EvaluationAccessError, origin?: string) {
 
 function safeStreamError(error: unknown) {
   if (error instanceof ModelOutputInvalidError || error instanceof V6PostcheckError) {
-    return { type: "error", code: "MODEL_FORMAT_ERROR", message: "模型结果未通过评分规则校验，请重试" };
+    const diagnostic = error instanceof V6PostcheckError ? error.rule : error.detail;
+    return {
+      type: "error",
+      code: "MODEL_FORMAT_ERROR",
+      message: "模型结果未通过评分规则校验，请重试",
+      diagnostic,
+    };
   }
   if (error instanceof ModelCallFailedError) {
     const detail = error.detail.toLowerCase();
