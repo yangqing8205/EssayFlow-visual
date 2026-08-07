@@ -59,6 +59,64 @@ export const V6FinalReportSchema = z.object({
 
 export const V6EvaluateInputSchema = ParsedEssaySchema;
 
+export const V6Stage1Schema = z.object({
+  facts: z.array(z.object({ fact: z.string().min(1), evidence: z.string().min(1) })).min(1),
+  characters: z.array(z.string().min(1)).min(1),
+  relationships: z.array(z.string().min(1)).min(1),
+  knownInformation: z.array(z.string().min(1)).min(1),
+  completedEvents: z.array(z.string().min(1)).min(1),
+});
+
+export const V6SourceKeywordSchema = z.object({
+  category: z.enum(["catalyst", "emotion", "theme", "constraint", "p2Prerequisite"]),
+  quote: z.string().min(1),
+  function: z.string().min(1),
+}).superRefine((item, context) => {
+  if (item.category === "p2Prerequisite") return;
+  const words = item.quote.trim().split(/\s+/).filter(Boolean);
+  if (words.length > 7) {
+    context.addIssue({ code: "custom", message: "sourceKeyword must contain at most 7 words" });
+  }
+});
+
+export const V6Stage2Schema = z.object({
+  conflict: z.string().min(1),
+  concreteConflicts: z.array(z.string().min(1)).min(1),
+  foreshadowing: z.array(z.string().min(1)).min(1),
+  sourceKeywords: z.array(V6SourceKeywordSchema).min(1).max(10),
+  themeTrajectory: z.object({
+    initialBelief: z.string().min(1),
+    development: z.string().min(1),
+    cognitiveEndpoint: z.string().min(1),
+    cognitiveEndpointQuote: z.string().min(1),
+    endpointStatus: z.enum(["已经形成认知终点", "仅给出未完成走向"]),
+    themeSubject: z.string().min(1),
+    themeObject: z.string().min(1),
+    themeValue: z.string().min(1),
+  }),
+});
+
+export const V6Stage3Schema = z.object({
+  factChecks: z.array(z.object({
+    claim: z.string().min(1),
+    status: z.enum(["consistent", "conflict", "not-established"]),
+    evidence: z.string().min(1),
+  })),
+  draftJudgements: z.array(z.object({
+    key: V6ContentKeySchema,
+    status: V6ContentStatusSchema,
+    judgement: z.string().min(1),
+    evidence: z.string().min(1),
+  })).length(4),
+});
+
 export type V6EvaluateInput = z.infer<typeof V6EvaluateInputSchema>;
 export type V6FinalReport = z.infer<typeof V6FinalReportSchema>;
+export type V6Stage1 = z.infer<typeof V6Stage1Schema>;
+export type V6Stage2 = z.infer<typeof V6Stage2Schema>;
+export type V6Stage3 = z.infer<typeof V6Stage3Schema>;
 
+export type V6StageEvent = {
+  stage: 1 | 2 | 3 | 4;
+  status: "running" | "complete";
+};
