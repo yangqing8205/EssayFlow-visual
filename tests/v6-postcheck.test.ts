@@ -114,6 +114,15 @@ describe("V6 source keyword postchecks", () => {
     expect(() => assertV6SourceKeywords(sourceDirection(), input)).not.toThrow();
   });
 
+  it("accepts a longer quote when it is still copied exactly from the source", () => {
+    const candidate = sourceDirection();
+    candidate.sourceKeywords[2].quote = "He was facing health issues and his wife of thirty-five years had passed away a few months earlier.";
+
+    const parsed = V6Stage2Schema.safeParse(candidate);
+    expect(parsed.success).toBe(true);
+    if (parsed.success) expect(() => assertV6SourceKeywords(parsed.data, input)).not.toThrow();
+  });
+
   it("rejects missing categories, fabricated quotes, and duplicate clues", () => {
     const missing = sourceDirection();
     missing.sourceKeywords = missing.sourceKeywords.filter(item => item.category !== "constraint");

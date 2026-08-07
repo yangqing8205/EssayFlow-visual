@@ -76,12 +76,6 @@ export const V6SourceKeywordSchema = z.object({
   category: z.enum(["catalyst", "emotion", "theme", "constraint", "p2Prerequisite"]),
   quote: z.string().min(1),
   function: z.string().min(1),
-}).superRefine((item, context) => {
-  if (item.category === "p2Prerequisite") return;
-  const words = item.quote.trim().split(/\s+/).filter(Boolean);
-  if (words.length > 7) {
-    context.addIssue({ code: "custom", message: "sourceKeyword must contain at most 7 words" });
-  }
 });
 
 export const V6Stage2Schema = z.object({
