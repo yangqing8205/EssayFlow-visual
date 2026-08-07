@@ -1,0 +1,8 @@
+import {EssayInputSchema,ParsedEssaySchema,type EssayInput,type ParsedEssay} from "@/lib/schemas";
+const WORD_RE=/[A-Za-z]+(?:['’][A-Za-z]+)?/g;const NOTICE_RE=/^(注意|注意事项|notes?\s*[:：]?)/i;
+export function wordCount(text:string){return text.match(WORD_RE)?.length??0}
+function normalizeLine(line:string){return line.replace(/^[-—–_\s]+|[-—–_\s]+$/g,"").trim()}
+function isEnglishContent(line:string){return wordCount(line)>=5}
+function stripStarter(text:string,starter:string){const value=text.trim(),fixed=starter.trim();return value.toLocaleLowerCase().startsWith(fixed.toLocaleLowerCase())?value.slice(fixed.length).trim():value}
+export function parsePromptText(promptText:string){const lines=promptText.replace(/\r/g,"").split("\n").map(normalizeLine).filter(Boolean);if(lines.length<3)throw new Error("题目内容过短，暂时无法识别原文和两句段首语");const noticeIndex=lines.findIndex(line=>NOTICE_RE.test(line));const afterNotice=lines.slice(noticeIndex>=0?noticeIndex+1:0).filter(isEnglishContent);const candidates=afterNotice.length>=2?afterNotice:lines.filter(isEnglishContent);if(candidates.length<2)throw new Error("没有识别到两句英文段首语，请检查粘贴内容");const starter1=candidates.at(-2)!,starter2=candidates.at(-1)!;const sourceBoundary=noticeIndex>=0?noticeIndex:lines.lastIndexOf(starter1);const sourceText=lines.slice(0,sourceBoundary).filter(isEnglishContent).join("\n").trim();return {sourceText,starter1,starter2}}
+export function parseEssay(input:EssayInput):ParsedEssay{const valid=EssayInputSchema.parse(input),prompt=parsePromptText(valid.promptText);return ParsedEssaySchema.parse({...prompt,studentParagraph1:stripStarter(valid.studentParagraph1,prompt.starter1),studentParagraph2:stripStarter(valid.studentParagraph2,prompt.starter2)})}

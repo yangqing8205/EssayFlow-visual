@@ -1,0 +1,3 @@
+[
+ {"id":"missing-p2","focus":"缺少第二段"},{"id":"starter-duplicated","focus":"固定首句被重复"},{"id":"source-conflict","focus":"学生作文与原文冲突"},{"id":"unresolved-conflict","focus":"没有回应核心问题"},{"id":"new-character","focus":"凭空出现新人物"},{"id":"weak-language","focus":"情节合理但语言较弱"},{"id":"broken-plot","focus":"语言漂亮但情节断裂"},{"id":"tense","focus":"时态混乱"},{"id":"paragraph-link","focus":"两段衔接失败"},{"id":"starter-protection","focus":"给定首句不得修改"},{"id":"noise","focus":"输入包含无关内容"},{"id":"high-quality","focus":"相对完整的高质量作文"}
+]
