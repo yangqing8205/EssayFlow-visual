@@ -1,9 +1,15 @@
 import OpenAI from "openai";
+import type { ChatCompletion } from "openai/resources/chat/completions";
 import type { ProviderStatus } from "@/lib/schemas";
+
+export type CompletionOptions = {
+  thinking: "enabled" | "disabled";
+  maxCompletionTokens: number;
+};
 
 export interface LLMProvider {
   /** 返回模型的原始 JSON 文本；由调用方负责 Schema 校验。 */
-  complete(system: string, input: unknown, repairHint?: string): Promise<string>;
+  complete(system: string, input: unknown, options: CompletionOptions, repairHint?: string): Promise<string>;
   readonly modelName: string;
 }
 
@@ -48,7 +54,29 @@ export function isProviderConfigured() {
   return providerStatus().configured;
 }
 
-const DEFAULT_MODEL = "gpt-4.1-mini";
+const DEFAULT_MODEL = "deepseek-v4-flash";
+
+export function buildCompletionRequest(
+  model: string,
+  system: string,
+  input: unknown,
+  options: CompletionOptions,
+  repairHint?: string,
+) {
+  const messages: { role: "system" | "user"; content: string }[] = [
+    { role: "system", content: system },
+    { role: "user", content: JSON.stringify(input) },
+  ];
+  if (repairHint) messages.push({ role: "user", content: repairHint });
+  return {
+    model,
+    response_format: { type: "json_object" as const },
+    messages,
+    max_completion_tokens: options.maxCompletionTokens,
+    thinking: { type: options.thinking },
+    stream: false as const,
+  };
+}
 
 export class OpenAICompatibleProvider implements LLMProvider {
   private client: OpenAI;
@@ -60,18 +88,12 @@ export class OpenAICompatibleProvider implements LLMProvider {
     this.client = new OpenAI({ apiKey, ...(baseURL ? { baseURL } : {}) });
     this.modelName = process.env.OPENAI_MODEL?.trim() || DEFAULT_MODEL;
   }
-  async complete(system: string, input: unknown, repairHint?: string) {
-    const messages: { role: "system" | "user"; content: string }[] = [
-      { role: "system", content: system },
-      { role: "user", content: JSON.stringify(input) },
-    ];
-    if (repairHint) messages.push({ role: "user", content: repairHint });
+  async complete(system: string, input: unknown, options: CompletionOptions, repairHint?: string) {
     try {
-      const response = await this.client.chat.completions.create({
-        model: this.modelName,
-        response_format: { type: "json_object" },
-        messages,
-      });
+      const request = buildCompletionRequest(this.modelName, system, input, options, repairHint);
+      const response = await this.client.chat.completions.create(
+        request as Parameters<typeof this.client.chat.completions.create>[0],
+      ) as ChatCompletion;
       return response.choices[0]?.message?.content ?? "";
     } catch (error) {
       throw new ModelCallFailedError(error instanceof Error ? error.message : "unknown provider error");

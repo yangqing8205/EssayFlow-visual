@@ -78,7 +78,12 @@ async function requestModelReport(
   for (let attempt = 0; attempt <= MAX_REPAIR_ATTEMPTS; attempt += 1) {
     const hint = attempt === 0 ? undefined : repairHint(lastError);
     if (attempt > 0) stage("report", "running", `正在修复模型输出结构（第 ${attempt} 次）`);
-    const raw = await provider.complete(EVALUATION_PROMPT, payload, hint);
+    const raw = await provider.complete(
+      EVALUATION_PROMPT,
+      payload,
+      { thinking: "disabled", maxCompletionTokens: 6000 },
+      hint,
+    );
     let candidate: unknown;
     try {
       candidate = JSON.parse(raw || "{}");

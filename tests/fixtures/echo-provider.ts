@@ -1,15 +1,15 @@
-import type { LLMProvider } from "@/lib/providers";
+import type { CompletionOptions, LLMProvider } from "@/lib/providers";
 import type { ModelReport, ParsedEssay } from "@/lib/schemas";
 
-export type CompleteCall = { system: string; input: unknown; repairHint?: string };
+export type CompleteCall = { system: string; input: unknown; options: CompletionOptions; repairHint?: string };
 
 /** 记录每次调用，并按脚本依次返回原始字符串，用于验证重试与错误路径。 */
 export class ScriptedProvider implements LLMProvider {
   readonly calls: CompleteCall[] = [];
   readonly modelName = "scripted-test-model";
   constructor(private responses: string[]) {}
-  async complete(system: string, input: unknown, repairHint?: string) {
-    this.calls.push({ system, input, repairHint });
+  async complete(system: string, input: unknown, options: CompletionOptions, repairHint?: string) {
+    this.calls.push({ system, input, options, repairHint });
     return this.responses[Math.min(this.calls.length - 1, this.responses.length - 1)] ?? "";
   }
 }
