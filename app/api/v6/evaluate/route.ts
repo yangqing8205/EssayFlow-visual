@@ -42,13 +42,13 @@ export function createV6EvaluateHandler(dependencies: HandlerDependencies = {}) 
   const pipeline = dependencies.runPipeline ?? runV6Pipeline;
 
   return async function handle(request: Request) {
-    let origin: string;
+    let origin: string | undefined;
     try {
       origin = allowedOrigin(request, env);
       requireAccessCode(request, env);
       consumeIpAllowance(request, env, now());
     } catch (error) {
-      if (error instanceof EvaluationAccessError) return jsonError(error);
+      if (error instanceof EvaluationAccessError) return jsonError(error, origin);
       return Response.json({ error: "访问校验失败", code: "ACCESS_ERROR" }, { status: 500 });
     }
 

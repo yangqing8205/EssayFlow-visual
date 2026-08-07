@@ -1,5 +1,4 @@
 import { z } from "zod";
-import { ParsedEssaySchema } from "@/lib/schemas";
 
 export const V6LanguagePlacementSchema = z.enum([
   "档内最高位",
@@ -57,7 +56,13 @@ export const V6FinalReportSchema = z.object({
   modelVersion: z.string().optional(),
 });
 
-export const V6EvaluateInputSchema = ParsedEssaySchema;
+export const V6EvaluateInputSchema = z.object({
+  sourceText: z.string().min(60, "未能识别完整阅读原文").max(15_000, "原文过长"),
+  starter1: z.string().min(5, "未能识别第一段给定首句").max(1_000, "第一段首句过长"),
+  studentParagraph1: z.string().min(5, "请填写第一段学生续写").max(8_000, "第一段续写过长"),
+  starter2: z.string().min(5, "未能识别第二段给定首句").max(1_000, "第二段首句过长"),
+  studentParagraph2: z.string().min(5, "请填写第二段学生续写").max(8_000, "第二段续写过长"),
+});
 
 export const V6Stage1Schema = z.object({
   facts: z.array(z.object({ fact: z.string().min(1), evidence: z.string().min(1) })).min(1),

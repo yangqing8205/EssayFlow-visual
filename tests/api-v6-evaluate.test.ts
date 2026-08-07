@@ -45,7 +45,9 @@ describe("POST /api/v6/evaluate", () => {
 
   it("requires the deployed access code", async () => {
     const handler = createV6EvaluateHandler({ env, runPipeline: successfulPipeline });
-    expect((await handler(request({ "x-essayflow-access-code": "" }))).status).toBe(401);
+    const missing = await handler(request({ "x-essayflow-access-code": "" }));
+    expect(missing.status).toBe(401);
+    expect(missing.headers.get("access-control-allow-origin")).toBe("https://essayflow-demo.yangqing8205.chatgpt.site");
     expect((await handler(request({ "x-essayflow-access-code": "wrong" }))).status).toBe(401);
   });
 
@@ -68,6 +70,8 @@ describe("POST /api/v6/evaluate", () => {
     const handler = createV6EvaluateHandler({ env, runPipeline: successfulPipeline });
     const response = await handler(request({}, { sourceText: "short" }));
     expect(response.status).toBe(400);
+    const excessive = await handler(request({}, { ...input, sourceText: "x".repeat(15_001) }));
+    expect(excessive.status).toBe(400);
   });
 
   it("streams ordered stage events and one canonical result", async () => {
