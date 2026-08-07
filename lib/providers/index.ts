@@ -72,7 +72,7 @@ export function buildCompletionRequest(
     model,
     response_format: { type: "json_object" as const },
     messages,
-    max_completion_tokens: options.maxCompletionTokens,
+    max_tokens: options.maxCompletionTokens,
     thinking: { type: options.thinking },
     stream: false as const,
   };

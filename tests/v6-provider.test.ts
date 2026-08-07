@@ -11,7 +11,8 @@ describe("DeepSeek completion request", () => {
     );
 
     expect(request.thinking).toEqual({ type: "disabled" });
-    expect(request.max_completion_tokens).toBe(2000);
+    expect(request.max_tokens).toBe(2000);
+    expect(request).not.toHaveProperty("max_completion_tokens");
     expect(request.response_format).toEqual({ type: "json_object" });
   });
 
