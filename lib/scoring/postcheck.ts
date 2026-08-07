@@ -59,6 +59,9 @@ export function assertV6SourceKeywords(stage2: V6Stage2, input: V6EvaluateInput)
     const quote = normalizeEvidence(item.quote);
     if (seen.has(quote)) fail("source-keyword-duplicate");
     seen.add(quote);
+    if (item.category === "p2Prerequisite" && quote !== starter2) {
+      fail("p2-prerequisite-starter2");
+    }
     const haystack = item.category === "p2Prerequisite" ? starter2 : source;
     if (!haystack.includes(quote)) {
       const diagnosticQuote = item.quote.replace(/\s+/g, " ").slice(0, 120);

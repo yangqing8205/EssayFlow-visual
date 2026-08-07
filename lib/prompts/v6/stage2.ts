@@ -3,6 +3,7 @@ import type { V6EvaluateInput, V6Stage1 } from "@/lib/workflow/v6/types";
 export const STAGE2_PROMPT = `你正在执行 EssayFlow v6 的第二阶段：依据原文、题目给定首句和第一阶段事实，确定故事方向。
 你不得看到或推测学生原创续写。只输出合法 JSON，不要解释，不要输出推理过程。
 sourceKeywords 除 p2Prerequisite 外，每条 quote 必须逐字来自原文且为 1—7 个英文词。
+p2Prerequisite 的 quote 必须完整逐字等于 starter2；它的 function 用于穷尽说明该首句依赖的前提及其来源。
 themeObject 必须是字符串。
 
 输出结构：

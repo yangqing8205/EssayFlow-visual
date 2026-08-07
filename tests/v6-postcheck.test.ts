@@ -114,6 +114,13 @@ describe("V6 source keyword postchecks", () => {
     expect(() => assertV6SourceKeywords(sourceDirection(), input)).not.toThrow();
   });
 
+  it("requires the complete second starter for the p2 prerequisite keyword", () => {
+    const candidate = sourceDirection();
+    candidate.sourceKeywords[4].quote = "With the biscuits my wife had made";
+
+    expect(() => assertV6SourceKeywords(candidate, input)).toThrow(/p2-prerequisite-starter2/);
+  });
+
   it("accepts a longer quote when it is still copied exactly from the source", () => {
     const candidate = sourceDirection();
     candidate.sourceKeywords[2].quote = "He was facing health issues and his wife of thirty-five years had passed away a few months earlier.";

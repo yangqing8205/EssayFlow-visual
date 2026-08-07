@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { V6_RUBRIC } from "@/lib/scoring/rubric";
 import { buildStage1Input } from "@/lib/prompts/v6/stage1";
-import { buildStage2Input } from "@/lib/prompts/v6/stage2";
+import { STAGE2_PROMPT, buildStage2Input } from "@/lib/prompts/v6/stage2";
 import { STAGE4_PROMPT } from "@/lib/prompts/v6/stage4";
 
 const parsed = {
@@ -21,6 +21,10 @@ const stage1 = {
 };
 
 describe("V6 prompt isolation", () => {
+  it("tells stage 2 to copy the complete second starter into p2Prerequisite", () => {
+    expect(STAGE2_PROMPT).toContain("p2Prerequisite 的 quote 必须完整逐字等于 starter2");
+  });
+
   it("keeps starters and student writing out of Stage 1", () => {
     const payload = JSON.stringify(buildStage1Input(parsed));
     expect(payload).toContain("SOURCE_ONLY_SENTINEL");
@@ -42,4 +46,3 @@ describe("V6 prompt isolation", () => {
     expect(STAGE4_PROMPT.endsWith(V6_RUBRIC)).toBe(true);
   });
 });
-
