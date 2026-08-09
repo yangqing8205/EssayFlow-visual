@@ -119,7 +119,7 @@ export async function runV6Pipeline(input: V6EvaluateInput, options: RunV6Option
     buildStage4Input(input, stage1, stage2, stage3),
     V6FinalReportSchema,
     STAGE_OPTIONS[4],
-    report => assertV6Report(report, input),
+    report => assertV6Report(report, input, stage3),
     canonicalizeV6ScoreMetadata,
   ));
   return { ...report, modelVersion: provider.modelName };

@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import fixture from "@/tests/fixtures/v6-real-essay.json";
 import { assertV6Report, assertV6SourceKeywords } from "@/lib/scoring/postcheck";
-import { V6FinalReportSchema, V6Stage2Schema } from "@/lib/workflow/v6/types";
+import { V6FinalReportSchema, V6Stage2Schema, V6Stage3Schema } from "@/lib/workflow/v6/types";
 
 const input = {
   sourceText: fixture.exam.sourceText,
@@ -13,6 +13,20 @@ const input = {
 
 function report() {
   return V6FinalReportSchema.parse(fixture.goodReport);
+}
+
+function continuationAudit() {
+  return V6Stage3Schema.parse({
+    factChecks: [
+      { claim: "The continuation preserves the source facts.", status: "consistent", evidence: "Toby" },
+    ],
+    draftJudgements: [
+      { key: "conflict", status: "明显问题", judgement: "The reconciliation is too easy.", evidence: "three huge boxes of dog food" },
+      { key: "cohesion", status: "轻微瑕疵", judgement: "The transition is abrupt.", evidence: "I made a plan to visit my brother" },
+      { key: "theme", status: "表现充分", judgement: "The theme is aligned.", evidence: "understanding, caring and true love" },
+      { key: "plausibility", status: "明显问题", judgement: "The reconciliation is too easy.", evidence: "three huge boxes of dog food" },
+    ],
+  });
 }
 
 describe("V6 semantic postchecks", () => {
@@ -71,6 +85,21 @@ describe("V6 semantic postchecks", () => {
     candidate.contentJudgements[2].status = "明显问题";
 
     expect(() => assertV6Report(candidate, input)).toThrow(/theme-alignment-status/);
+  });
+
+  it("rejects duplicate hard penalties for conflict and plausibility without an independent fact conflict", () => {
+    const candidate = report();
+    candidate.total = 12;
+    candidate.band = 3;
+    candidate.bandRange = "11—15";
+    candidate.level = "第三档";
+    candidate.languagePlacement = "档内较低位";
+    candidate.contentJudgements[0].status = "明显问题";
+    candidate.contentJudgements[3].status = "明显问题";
+    candidate.contentJudgements[0].evidence = "three huge boxes of dog food";
+    candidate.contentJudgements[3].evidence = "three huge boxes of dog food";
+
+    expect(() => assertV6Report(candidate, input, continuationAudit())).toThrow(/duplicate-conflict-plausibility/);
   });
 
   it("rejects fabricated evidence but allows the fixture's longer evidence", () => {

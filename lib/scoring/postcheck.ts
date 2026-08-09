@@ -1,4 +1,4 @@
-import type { V6EvaluateInput, V6FinalReport, V6Stage2 } from "@/lib/workflow/v6/types";
+import type { V6EvaluateInput, V6FinalReport, V6Stage2, V6Stage3 } from "@/lib/workflow/v6/types";
 
 const LEVELS = ["", "第一档", "第二档", "第三档", "第四档", "第五档"] as const;
 const RANGES = ["", "1—5", "6—10", "11—15", "16—20", "21—25"] as const;
@@ -70,7 +70,7 @@ export function assertV6SourceKeywords(stage2: V6Stage2, input: V6EvaluateInput)
   }
 }
 
-export function assertV6Report(report: V6FinalReport, input: V6EvaluateInput) {
+export function assertV6Report(report: V6FinalReport, input: V6EvaluateInput, stage3?: V6Stage3) {
   if (report.languagePlacement !== expectedPlacement(report.total)) fail("score-placement");
   if (report.level !== LEVELS[report.band] || report.bandRange !== RANGES[report.band]) fail("band-range");
   if (Math.ceil(report.total / 5) !== report.band) fail("band-range");
@@ -89,6 +89,22 @@ export function assertV6Report(report: V6FinalReport, input: V6EvaluateInput) {
     && HARD_STATUSES.has(theme.status)
   ) {
     contentViolations.push("theme-alignment-status");
+  }
+  const conflict = report.contentJudgements.find(item => item.key === "conflict");
+  const plausibility = report.contentJudgements.find(item => item.key === "plausibility");
+  if (
+    stage3
+    && conflict
+    && plausibility
+    && HARD_STATUSES.has(conflict.status)
+    && HARD_STATUSES.has(plausibility.status)
+    && !stage3.factChecks.some(item => item.status === "conflict")
+  ) {
+    const conflictEvidence = new Set(evidenceFragments(conflict.evidence).map(normalizeEvidence));
+    const repeatsConflictEvidence = evidenceFragments(plausibility.evidence)
+      .map(normalizeEvidence)
+      .some(quote => conflictEvidence.has(quote));
+    if (repeatsConflictEvidence) contentViolations.push("duplicate-conflict-plausibility");
   }
   if (contentViolations.length) fail(contentViolations.join(","));
 
