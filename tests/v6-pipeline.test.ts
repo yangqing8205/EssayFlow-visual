@@ -176,4 +176,34 @@ describe("runV6Pipeline", () => {
     expect(report.total).toBe(18);
     expect(provider.calls).toHaveLength(5);
   });
+
+  it("accepts a complete stage-four report wrapped in a score object", async () => {
+    const provider = new QueueProvider(responses({ score: fixture.goodReport }));
+
+    const report = await runV6Pipeline(parsed, { providerFactory: () => provider });
+
+    expect(report.total).toBe(18);
+    expect(report.contentJudgements).toHaveLength(4);
+    expect(provider.calls).toHaveLength(4);
+  });
+
+  it("returns a conservative report when stage four stays structurally incomplete", async () => {
+    const incomplete = { analysis: "The continuation generally follows the source story." };
+    const provider = new QueueProvider([
+      JSON.stringify(stage1),
+      JSON.stringify(stage2),
+      JSON.stringify(stage3),
+      JSON.stringify(incomplete),
+      JSON.stringify(incomplete),
+    ]);
+
+    const report = await runV6Pipeline(parsed, { providerFactory: () => provider });
+
+    expect(report.total).toBe(18);
+    expect(report.contentJudgements.map(item => item.status)).toEqual(
+      stage3.draftJudgements.map(item => item.status),
+    );
+    expect(report.constraints).toContain("第四阶段报告结构异常，已依据前三阶段审计生成保守报告。语言档内位置仅供参考。");
+    expect(provider.calls).toHaveLength(5);
+  });
 });

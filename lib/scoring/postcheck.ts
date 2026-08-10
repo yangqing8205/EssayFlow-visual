@@ -8,6 +8,19 @@ const HARD_STATUSES = new Set(["明显问题", "失败/硬伤"]);
 const SOURCE_KEYWORD_CATEGORIES = ["catalyst", "emotion", "theme", "constraint", "p2Prerequisite"] as const;
 const UNVERIFIED_EVIDENCE = "证据引用未通过逐字核验，请结合原文与续写复核。";
 const VALIDATION_WARNING = "部分自动校验未通过，报告已保留供参考。请结合原文复核标记内容。";
+const STRUCTURAL_FALLBACK_WARNING = "第四阶段报告结构异常，已依据前三阶段审计生成保守报告。语言档内位置仅供参考。";
+const LABELS = {
+  conflict: "解决矛盾",
+  cohesion: "文本衔接",
+  theme: "主题表达",
+  plausibility: "情节合理性",
+} as const;
+const SUGGESTIONS = {
+  conflict: "补充人物之间真实的沟通、回应与关系修复过程。",
+  cohesion: "加强两段之间的行动准备与信息承接。",
+  theme: "让人物认知变化通过具体行动自然呈现。",
+  plausibility: "复核原文事实、人物动机和关键因果关系。",
+} as const;
 
 export class V6PostcheckError extends Error {
   constructor(readonly rule: string) {
@@ -29,6 +42,71 @@ export function normalizeEvidence(value: string) {
 
 function fail(rule: string): never {
   throw new V6PostcheckError(rule);
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function normalizeLegacyPlacement(value: unknown) {
+  if (value === "档内高位") return "档内较高位";
+  if (value === "档内低位") return "档内较低位";
+  return value;
+}
+
+/** 接受模型偶尔返回的 report/score 外层，以及旧版报告的 story/language 分组。 */
+export function normalizeV6FinalCandidate(value: unknown, stage2: V6Stage2): unknown {
+  if (!isRecord(value)) return value;
+  if (isRecord(value.report)) return normalizeV6FinalCandidate(value.report, stage2);
+  if (typeof value.total === "number") return value;
+  if (!isRecord(value.score)) return value;
+
+  const score = value.score;
+  const story = isRecord(value.story) ? value.story : isRecord(score.story) ? score.story : undefined;
+  const legacyTrajectory = story && isRecord(story.themeTrajectory) ? story.themeTrajectory : undefined;
+  const language = isRecord(value.language) ? value.language : undefined;
+  const rawIssues = Array.isArray(value.issues)
+    ? value.issues
+    : Array.isArray(score.issues)
+      ? score.issues
+      : language && Array.isArray(language.issues)
+        ? language.issues
+        : [];
+  const rawJudgements = Array.isArray(score.contentJudgements) ? score.contentJudgements : [];
+
+  return {
+    ...score,
+    languagePlacement: normalizeLegacyPlacement(score.languagePlacement),
+    contentJudgements: rawJudgements.map(item => {
+      if (!isRecord(item)) return item;
+      return {
+        ...item,
+        evidence: Array.isArray(item.evidence) ? item.evidence.join(" / ") : item.evidence,
+      };
+    }),
+    story: {
+      theme: story?.theme ?? stage2.themeTrajectory.themeValue,
+      themeTrajectory: {
+        initialBelief: legacyTrajectory?.initialBelief ?? legacyTrajectory?.initial ?? stage2.themeTrajectory.initialBelief,
+        development: legacyTrajectory?.development ?? stage2.themeTrajectory.development,
+        cognitiveEndpoint: legacyTrajectory?.cognitiveEndpoint ?? legacyTrajectory?.endpoint ?? stage2.themeTrajectory.cognitiveEndpoint,
+        themeSubject: legacyTrajectory?.themeSubject ?? stage2.themeTrajectory.themeSubject,
+        themeObject: legacyTrajectory?.themeObject ?? stage2.themeTrajectory.themeObject,
+        themeValue: legacyTrajectory?.themeValue ?? stage2.themeTrajectory.themeValue,
+        continuationAlignment: legacyTrajectory?.continuationAlignment ?? "方向一致但较浅",
+        explanation: legacyTrajectory?.explanation ?? "续写方向依据原文线索与人物认知终点进行判断。",
+      },
+    },
+    issues: rawIssues.map(item => {
+      if (!isRecord(item)) return item;
+      return {
+        original: item.original ?? item.sentence,
+        problem: item.problem,
+        explanation: item.explanation ?? item.reason,
+        rewrite: item.rewrite,
+      };
+    }),
+  };
 }
 
 function expectedPlacement(score: number) {
@@ -108,6 +186,53 @@ export function recoverV6Report(
     total = Math.min(total, 15);
   }
   return canonicalizeV6ScoreMetadata({ ...report, total, contentJudgements, issues, constraints });
+}
+
+/** 第四阶段结构彻底不可用时，依据已完成的原文分析与逐项核对生成保守报告。 */
+export function buildV6FallbackReport(
+  input: V6EvaluateInput,
+  stage2: V6Stage2,
+  stage3: V6Stage3,
+): V6FinalReport {
+  const statuses = stage3.draftJudgements.map(item => item.status);
+  const total = statuses.includes("失败/硬伤")
+    ? 9
+    : statuses.includes("明显问题")
+      ? 14
+      : statuses.includes("轻微瑕疵")
+        ? 18
+        : 20;
+  const contentJudgements = stage3.draftJudgements.map(item => ({
+    ...item,
+    label: LABELS[item.key],
+    suggestion: SUGGESTIONS[item.key],
+  }));
+  const report = canonicalizeV6ScoreMetadata({
+    total,
+    band: 1,
+    bandRange: "1—5",
+    level: "第一档",
+    languagePlacement: "档内最低位",
+    summary: "前三阶段已完成原文理解与续写核对；第四阶段结构异常，因此本报告按已有内容判断保守定位。",
+    languageRationale: "第四阶段语言定位未能完整返回，当前档内位置为保守参考，不影响下方已完成的内容判断。",
+    constraints: [STRUCTURAL_FALLBACK_WARNING],
+    contentJudgements,
+    story: {
+      theme: stage2.themeTrajectory.themeValue,
+      themeTrajectory: {
+        initialBelief: stage2.themeTrajectory.initialBelief,
+        development: stage2.themeTrajectory.development,
+        cognitiveEndpoint: stage2.themeTrajectory.cognitiveEndpoint,
+        themeSubject: stage2.themeTrajectory.themeSubject,
+        themeObject: stage2.themeTrajectory.themeObject,
+        themeValue: stage2.themeTrajectory.themeValue,
+        continuationAlignment: "方向一致但较浅",
+        explanation: "主题轨迹依据第二阶段锁定的原文认知方向生成。",
+      },
+    },
+    issues: [],
+  });
+  return recoverV6Report(report, input);
 }
 
 export function assertV6SourceKeywords(stage2: V6Stage2, input: V6EvaluateInput) {

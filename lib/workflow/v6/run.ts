@@ -9,7 +9,9 @@ import {
 import {
   assertV6Report,
   assertV6SourceKeywords,
+  buildV6FallbackReport,
   canonicalizeV6ScoreMetadata,
+  normalizeV6FinalCandidate,
   recoverV6Report,
   V6PostcheckError,
 } from "@/lib/scoring/postcheck";
@@ -60,6 +62,8 @@ async function requestStage<T>(
   validate?: (value: T) => void,
   normalize?: (value: T) => T,
   recover?: (value: T, error: V6PostcheckError) => T,
+  prepare?: (value: unknown) => unknown,
+  fallback?: (error: unknown) => T,
 ) {
   let repairHint: string | undefined;
   let lastError: unknown;
@@ -67,7 +71,8 @@ async function requestStage<T>(
   for (let attempt = 0; attempt < 2; attempt += 1) {
     const raw = await provider.complete(system, input, options, repairHint);
     try {
-      const result = schema.safeParse(parseJson(raw));
+      const parsed = parseJson(raw);
+      const result = schema.safeParse(prepare ? prepare(parsed) : parsed);
       if (!result.success) throw new ModelOutputInvalidError(schemaDetail(result.error));
       const value = normalize ? normalize(result.data) : result.data;
       lastSchemaValidValue = value;
@@ -86,6 +91,7 @@ async function requestStage<T>(
   if (lastError instanceof V6PostcheckError && lastSchemaValidValue !== undefined) {
     return recover ? recover(lastSchemaValidValue, lastError) : lastSchemaValidValue;
   }
+  if (fallback) return fallback(lastError);
   throw lastError;
 }
 
@@ -129,6 +135,8 @@ export async function runV6Pipeline(input: V6EvaluateInput, options: RunV6Option
     report => assertV6Report(report, input, stage3),
     canonicalizeV6ScoreMetadata,
     (report, error) => recoverV6Report(report, input, error, stage3),
+    value => normalizeV6FinalCandidate(value, stage2),
+    () => buildV6FallbackReport(input, stage2, stage3),
   ));
   return { ...report, modelVersion: provider.modelName };
 }
