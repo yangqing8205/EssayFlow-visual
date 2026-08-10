@@ -183,6 +183,14 @@ describe("V6 source keyword postchecks", () => {
     expect(() => assertV6SourceKeywords(candidate, input)).not.toThrow();
   });
 
+  it("accepts English source evidence separated by an inline Chinese gloss", () => {
+    const candidate = sourceDirection();
+    candidate.sourceKeywords[0].quote = "my conscience kept bothering me";
+    const glossInput = { ...input, sourceText: input.sourceText.replace("my conscience kept", "my conscience（良心）kept") };
+
+    expect(() => assertV6SourceKeywords(candidate, glossInput)).not.toThrow();
+  });
+
   it("rejects missing categories, fabricated quotes, and duplicate clues", () => {
     const missing = sourceDirection();
     missing.sourceKeywords = missing.sourceKeywords.filter(item => item.category !== "constraint");

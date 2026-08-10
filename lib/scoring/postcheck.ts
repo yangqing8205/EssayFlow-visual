@@ -48,12 +48,19 @@ function evidenceFragments(evidence: string) {
   return evidence.split(/\s+\/\s+/).map(part => part.trim()).filter(Boolean);
 }
 
+function normalizedSourceVariants(value: string) {
+  const withoutChineseGloss = value
+    .replace(/（[^）]*[\u3400-\u9fff][^）]*）/g, "")
+    .replace(/\([^)]*[\u3400-\u9fff][^)]*\)/g, "");
+  return [normalizeEvidence(value), normalizeEvidence(withoutChineseGloss)];
+}
+
 export function assertV6SourceKeywords(stage2: V6Stage2, input: V6EvaluateInput) {
   const categories = new Set(stage2.sourceKeywords.map(item => item.category));
   if (SOURCE_KEYWORD_CATEGORIES.some(category => !categories.has(category))) fail("source-keyword-categories");
 
   const seen = new Set<string>();
-  const source = normalizeEvidence(input.sourceText);
+  const source = normalizedSourceVariants(input.sourceText);
   const starter2 = normalizeEvidence(input.starter2);
   for (const item of stage2.sourceKeywords) {
     const quote = normalizeEvidence(item.quote);
@@ -62,8 +69,8 @@ export function assertV6SourceKeywords(stage2: V6Stage2, input: V6EvaluateInput)
     if (item.category === "p2Prerequisite" && quote !== starter2) {
       fail("p2-prerequisite-starter2");
     }
-    const haystack = item.category === "p2Prerequisite" ? starter2 : source;
-    if (!haystack.includes(quote)) {
+    const haystack = item.category === "p2Prerequisite" ? [starter2] : source;
+    if (!haystack.some(variant => variant.includes(quote))) {
       const diagnosticQuote = item.quote.replace(/\s+/g, " ").slice(0, 120);
       fail(`source-keyword-evidence:${item.category}:${diagnosticQuote}`);
     }
