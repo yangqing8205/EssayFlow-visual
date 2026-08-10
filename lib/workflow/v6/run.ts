@@ -10,6 +10,7 @@ import {
   assertV6Report,
   assertV6SourceKeywords,
   buildV6FallbackReport,
+  enforceV6ConflictAudit,
   finalizeV6ScoreDecision,
   normalizeV6FinalCandidate,
   recoverV6Report,
@@ -18,7 +19,7 @@ import {
 import { STAGE1_PROMPT, buildStage1Input } from "@/lib/prompts/v6/stage1";
 import { STAGE2_PROMPT, buildStage2Input } from "@/lib/prompts/v6/stage2";
 import { STAGE3_PROMPT, STAGE3_RECOVERY_PROMPT, buildStage3Input } from "@/lib/prompts/v6/stage3";
-import { STAGE4_PROMPT, buildStage4Input } from "@/lib/prompts/v6/stage4";
+import { STAGE4_PROMPT, STAGE4_RECOVERY_PROMPT, buildStage4Input } from "@/lib/prompts/v6/stage4";
 import { normalizeV6StageCandidate } from "@/lib/workflow/v6/normalize";
 import {
   V6Stage4DecisionSchema,
@@ -138,7 +139,7 @@ export async function runV6Pipeline(input: V6EvaluateInput, options: RunV6Option
     V6Stage3Schema,
     STAGE_OPTIONS[3],
     undefined,
-    undefined,
+    enforceV6ConflictAudit,
     undefined,
     value => normalizeV6StageCandidate(value, 3),
     async () => {
@@ -150,7 +151,7 @@ export async function runV6Pipeline(input: V6EvaluateInput, options: RunV6Option
           V6Stage3Schema,
           { thinking: "disabled", maxCompletionTokens: 3000 },
           undefined,
-          undefined,
+          enforceV6ConflictAudit,
           undefined,
           value => normalizeV6StageCandidate(value, 3),
         );
@@ -169,7 +170,18 @@ export async function runV6Pipeline(input: V6EvaluateInput, options: RunV6Option
     report => finalizeV6ScoreDecision(report, stage3, !stage3),
     (report, error) => recoverV6Report(report, input, error, stage3),
     value => normalizeV6FinalCandidate(normalizeV6StageCandidate(value, 4), stage2),
-    stage3 ? () => buildV6FallbackReport(input, stage2, stage3) : undefined,
+    () => requestStage<V6Stage4Decision, V6FinalReport>(
+      provider,
+      STAGE4_RECOVERY_PROMPT,
+      buildStage4Input(input, stage1, stage2, stage3),
+      V6Stage4DecisionSchema,
+      { thinking: "disabled", maxCompletionTokens: 4000 },
+      report => assertV6Report(report, input, stage3),
+      report => finalizeV6ScoreDecision(report, stage3, !stage3),
+      (report, error) => recoverV6Report(report, input, error, stage3),
+      value => normalizeV6FinalCandidate(normalizeV6StageCandidate(value, 4), stage2),
+      stage3 ? () => buildV6FallbackReport(input, stage2, stage3) : undefined,
+    ),
   ));
   return { ...report, modelVersion: provider.modelName };
 }

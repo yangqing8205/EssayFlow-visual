@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { V6_RUBRIC } from "@/lib/scoring/rubric";
 import { buildStage1Input } from "@/lib/prompts/v6/stage1";
 import { STAGE2_PROMPT, buildStage2Input } from "@/lib/prompts/v6/stage2";
+import { STAGE3_PROMPT } from "@/lib/prompts/v6/stage3";
 import { STAGE4_PROMPT } from "@/lib/prompts/v6/stage4";
 
 const parsed = {
@@ -44,6 +45,11 @@ describe("V6 prompt isolation", () => {
 
   it("uses the exact verified rubric in Stage 4", () => {
     expect(STAGE4_PROMPT.endsWith(V6_RUBRIC)).toBe(true);
+  });
+
+  it("uses the same verified rubric when Stage 3 drafts the content judgements", () => {
+    expect(STAGE3_PROMPT.endsWith(V6_RUBRIC)).toBe(true);
+    expect(STAGE3_PROMPT).toContain("不以“事情最后是否变好”为判断标准");
   });
 
   it("separates solution completeness from hard story-world consistency", () => {

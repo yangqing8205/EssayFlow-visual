@@ -43,6 +43,13 @@ const stage2 = {
 };
 
 const stage3 = {
+  conflictAudit: {
+    coreConflictResponse: "充分回应",
+    processClosure: "简化",
+    resolutionDriver: "原文内生信息",
+    resultOnly: false,
+    evidence: "we had never taken Toby as a part of our family",
+  },
   factChecks: [{ claim: "The narrator knows Toby's name.", status: "consistent", evidence: "Toby" }],
   draftJudgements: [
     { key: "conflict", status: "轻微瑕疵", judgement: "The conflict is resolved.", evidence: "we had never taken Toby as a part of our family" },
@@ -218,12 +225,33 @@ describe("runV6Pipeline", () => {
     expect(provider.calls).toHaveLength(4);
   });
 
-  it("returns a conservative report when stage four stays structurally incomplete", async () => {
+  it("uses a compact recovery request when stage four stays structurally incomplete", async () => {
     const incomplete = { analysis: "The continuation generally follows the source story." };
     const provider = new QueueProvider([
       JSON.stringify(stage1),
       JSON.stringify(stage2),
       JSON.stringify(stage3),
+      JSON.stringify(incomplete),
+      JSON.stringify(incomplete),
+      JSON.stringify(fixture.goodReport),
+    ]);
+
+    const report = await runV6Pipeline(parsed, { providerFactory: () => provider });
+
+    expect(report.total).toBe(18);
+    expect(report.summary).toBe(fixture.goodReport.summary);
+    expect(provider.calls).toHaveLength(6);
+    expect(provider.calls[5].options.maxCompletionTokens).toBeLessThan(provider.calls[3].options.maxCompletionTokens);
+  });
+
+  it("returns a conservative report when normal and compact stage-four formats both fail", async () => {
+    const incomplete = { analysis: "The continuation generally follows the source story." };
+    const provider = new QueueProvider([
+      JSON.stringify(stage1),
+      JSON.stringify(stage2),
+      JSON.stringify(stage3),
+      JSON.stringify(incomplete),
+      JSON.stringify(incomplete),
       JSON.stringify(incomplete),
       JSON.stringify(incomplete),
     ]);
@@ -235,7 +263,7 @@ describe("runV6Pipeline", () => {
       stage3.draftJudgements.map(item => item.status),
     );
     expect(report.constraints).toContain("第四阶段报告结构异常，已依据前三阶段审计生成保守报告。语言档内位置仅供参考。");
-    expect(provider.calls).toHaveLength(5);
+    expect(provider.calls).toHaveLength(7);
   });
 
   it("uses a compact recovery request when stage three stays malformed", async () => {

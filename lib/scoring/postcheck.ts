@@ -32,6 +32,46 @@ const FIFTH_BAND_ADJUSTMENT = "第五档准入条件未满足，已按内容审�
 const FOURTH_BAND_ADJUSTMENT = "第四档内容条件未满足，已按内容审计调整为第三档。";
 export const STAGE3_RECOVERY_WARNING = "第三阶段结构异常，第四阶段已重新执行续写事实核对。";
 
+const STATUS_SEVERITY = new Map([
+  ["表现充分", 0],
+  ["轻微瑕疵", 1],
+  ["明显问题", 2],
+  ["失败/硬伤", 3],
+] as const);
+
+/** 根据第三阶段自己的过程核对结果限制 conflict，防止只因结尾和好就判为充分。 */
+export function enforceV6ConflictAudit(stage3: V6Stage3): V6Stage3 {
+  const audit = stage3.conflictAudit;
+  let requiredStatus: "表现充分" | "轻微瑕疵" | "明显问题" = "表现充分";
+  if (
+    audit.coreConflictResponse === "未回应"
+    || audit.processClosure === "缺失"
+    || audit.resolutionDriver === "主要依赖外部替代"
+    || audit.resultOnly
+  ) {
+    requiredStatus = "明显问题";
+  } else if (
+    audit.coreConflictResponse === "部分回应"
+    || audit.processClosure === "简化"
+    || audit.resolutionDriver === "内生信息与外部细节并用"
+  ) {
+    requiredStatus = "轻微瑕疵";
+  }
+  const draftJudgements = stage3.draftJudgements.map(item => {
+    if (item.key !== "conflict") return item;
+    if ((STATUS_SEVERITY.get(item.status) ?? 0) >= (STATUS_SEVERITY.get(requiredStatus) ?? 0)) return item;
+    return {
+      ...item,
+      status: requiredStatus,
+      judgement: requiredStatus === "明显问题"
+        ? "故事出现了积极结果，但核心冲突的解决过程没有形成充分的“问题—行动—结果”闭环。"
+        : "核心冲突基本得到回应，但人物转变或解决过程有所简化。",
+      evidence: audit.evidence,
+    };
+  });
+  return { ...stage3, draftJudgements };
+}
+
 export class V6PostcheckError extends Error {
   constructor(readonly rule: string) {
     super(`v6-postcheck:${rule}`);

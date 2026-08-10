@@ -19,6 +19,11 @@ issues 只能分析学生原创，original 不得来自两句给定首句。
 
 export const STAGE4_PROMPT = `${STAGE4_HEADER}${V6_RUBRIC}`;
 
+export const STAGE4_RECOVERY_PROMPT = `依据输入中的 sourceFacts、sourceDirection、continuationAudit 和学生续写，只返回完整 JSON，不要解释或外层对象。
+你只判断 contentBand 与 languagePlacement，数字分数由服务端计算。contentJudgements 必须恰好四项并依次为 conflict、cohesion、theme、plausibility。
+解决矛盾不以结尾是否和好为标准；只有道歉、礼物和立即接受而缺少态度变化过程时，不得判为表现充分。过程简化或理想化只评价 conflict，不得在 plausibility 重复扣分。
+{"contentBand":1到5整数,"languagePlacement":"档内最高位|档内较高位|档内中位|档内较低位|档内最低位","summary":"总评","languageRationale":"语言依据","constraints":["限制"],"contentJudgements":[{"key":"conflict|cohesion|theme|plausibility","label":"项目名","status":"表现充分|轻微瑕疵|明显问题|失败/硬伤","judgement":"判断","evidence":"逐字证据","suggestion":"建议"}],"story":{"theme":"主题","themeTrajectory":{"initialBelief":"初始认识","development":"变化过程","cognitiveEndpoint":"认知终点","themeSubject":"主体","themeObject":"对象","themeValue":"价值","continuationAlignment":"延续或深化|方向一致但较浅|主题降格|主题冲突或倒退","explanation":"说明"}},"issues":[{"original":"学生原句","problem":"问题","explanation":"解释","rewrite":"改写"}]}`;
+
 export function buildStage4Input(
   input: V6EvaluateInput,
   stage1: V6Stage1,

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import fixture from "@/tests/fixtures/v6-real-essay.json";
-import { assertV6Report, assertV6SourceKeywords, finalizeV6ScoreDecision } from "@/lib/scoring/postcheck";
+import { assertV6Report, assertV6SourceKeywords, enforceV6ConflictAudit, finalizeV6ScoreDecision } from "@/lib/scoring/postcheck";
 import { V6FinalReportSchema, V6Stage2Schema, V6Stage3Schema } from "@/lib/workflow/v6/types";
 
 const input = {
@@ -17,6 +17,13 @@ function report() {
 
 function continuationAudit() {
   return V6Stage3Schema.parse({
+    conflictAudit: {
+      coreConflictResponse: "部分回应",
+      processClosure: "简化",
+      resolutionDriver: "内生信息与外部细节并用",
+      resultOnly: false,
+      evidence: "three huge boxes of dog food",
+    },
     factChecks: [
       { claim: "The continuation preserves the source facts.", status: "consistent", evidence: "Toby" },
     ],
@@ -30,6 +37,16 @@ function continuationAudit() {
 }
 
 describe("V6 semantic postchecks", () => {
+  it("does not allow a positive ending alone to pass conflict resolution", () => {
+    const audit = continuationAudit();
+    audit.conflictAudit.resultOnly = true;
+    audit.draftJudgements[0].status = "表现充分";
+
+    const enforced = enforceV6ConflictAudit(audit);
+
+    expect(enforced.draftJudgements[0].status).toBe("明显问题");
+    expect(enforced.draftJudgements[0].evidence).toBe("three huge boxes of dog food");
+  });
   it("accepts the canonical 18-point fixture", () => {
     expect(() => assertV6Report(report(), input)).not.toThrow();
   });

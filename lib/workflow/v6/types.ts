@@ -110,6 +110,13 @@ export const V6Stage2Schema = z.object({
 });
 
 export const V6Stage3Schema = z.object({
+  conflictAudit: z.object({
+    coreConflictResponse: z.enum(["充分回应", "部分回应", "未回应"]),
+    processClosure: z.enum(["完整", "简化", "缺失"]),
+    resolutionDriver: z.enum(["原文内生信息", "内生信息与外部细节并用", "主要依赖外部替代"]),
+    resultOnly: z.boolean(),
+    evidence: z.string().min(1),
+  }),
   factChecks: z.array(z.object({
     claim: z.string().min(1),
     status: z.enum(["consistent", "conflict", "not-established"]),
