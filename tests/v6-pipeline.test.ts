@@ -78,7 +78,7 @@ describe("runV6Pipeline", () => {
     expect(report.total).toBe(18);
     expect(report.modelVersion).toBe(provider.modelName);
     expect(provider.calls).toHaveLength(4);
-    expect(provider.calls.map(call => call.options.thinking)).toEqual(["disabled", "disabled", "disabled", "disabled"]);
+    expect(provider.calls.map(call => call.options.thinking)).toEqual(["disabled", "disabled", "enabled", "enabled"]);
     const originalWordCount = `${fixture.sample.p1} ${fixture.sample.p2}`.match(/[A-Za-z]+(?:['’][A-Za-z]+)?/g)?.length;
     expect(provider.calls[2].input).toMatchObject({ studentOriginalWordCount: originalWordCount });
     expect(provider.calls[3].input).toMatchObject({ studentOriginalWordCount: originalWordCount });
@@ -135,6 +135,26 @@ describe("runV6Pipeline", () => {
     expect(report.contentJudgements[0].evidence).toContain("未通过逐字核验");
     expect(report.constraints).toContain("部分自动校验未通过，报告已保留供参考。请结合原文复核标记内容。");
     expect(provider.calls).toHaveLength(5);
+  });
+
+  it("returns a report but caps an invalid fifth-band result at the fourth-band ceiling", async () => {
+    const invalid = structuredClone(fixture.goodReport);
+    invalid.total = 22;
+    invalid.band = 5;
+    invalid.bandRange = "21—25";
+    invalid.level = "第五档";
+    invalid.languagePlacement = "档内较低位";
+    invalid.contentJudgements.forEach(item => { item.status = "表现充分"; });
+    const provider = new QueueProvider([...responses(invalid), JSON.stringify(invalid)]);
+
+    const report = await runV6Pipeline(parsed, { providerFactory: () => provider });
+
+    expect(report.total).toBe(20);
+    expect(report.band).toBe(4);
+    expect(report.bandRange).toBe("16—20");
+    expect(report.level).toBe("第四档");
+    expect(report.languagePlacement).toBe("档内最高位");
+    expect(report.constraints).toContain("部分自动校验未通过，报告已保留供参考。请结合原文复核标记内容。");
   });
 
   it("continues to a final report when source-keyword postchecks still fail after repair", async () => {

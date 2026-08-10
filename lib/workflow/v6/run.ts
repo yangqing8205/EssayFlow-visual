@@ -35,8 +35,8 @@ type RunV6Options = {
 const STAGE_OPTIONS: Record<1 | 2 | 3 | 4, CompletionOptions> = {
   1: { thinking: "disabled", maxCompletionTokens: 3000 },
   2: { thinking: "disabled", maxCompletionTokens: 4000 },
-  3: { thinking: "disabled", maxCompletionTokens: 5000 },
-  4: { thinking: "disabled", maxCompletionTokens: 7000 },
+  3: { thinking: "enabled", maxCompletionTokens: 5000 },
+  4: { thinking: "enabled", maxCompletionTokens: 7000 },
 };
 
 function parseJson(raw: string) {
@@ -128,7 +128,7 @@ export async function runV6Pipeline(input: V6EvaluateInput, options: RunV6Option
     STAGE_OPTIONS[4],
     report => assertV6Report(report, input, stage3),
     canonicalizeV6ScoreMetadata,
-    report => recoverV6Report(report, input),
+    (report, error) => recoverV6Report(report, input, error),
   ));
   return { ...report, modelVersion: provider.modelName };
 }

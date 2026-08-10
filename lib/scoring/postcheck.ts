@@ -72,7 +72,11 @@ function sourceContains(sources: string[], quote: string) {
   return sources.some(source => source.includes(normalized));
 }
 
-export function recoverV6Report(report: V6FinalReport, input: V6EvaluateInput): V6FinalReport {
+export function recoverV6Report(
+  report: V6FinalReport,
+  input: V6EvaluateInput,
+  error?: V6PostcheckError,
+): V6FinalReport {
   const sources = reportSourceVariants(input);
   const locked = [normalizeEvidence(input.starter1), normalizeEvidence(input.starter2)];
   const contentJudgements = report.contentJudgements.map(judgement => {
@@ -86,7 +90,15 @@ export function recoverV6Report(report: V6FinalReport, input: V6EvaluateInput): 
   const constraints = report.constraints.includes(VALIDATION_WARNING)
     ? report.constraints
     : [...report.constraints, VALIDATION_WARNING];
-  return { ...report, contentJudgements, issues, constraints };
+  const rules = new Set(error?.rule.split(",") ?? []);
+  let total = report.total;
+  if (rules.has("fifth-band-fuse") || rules.has("fifth-band-stage3-gate")) {
+    total = Math.min(total, 20);
+  }
+  if (rules.has("fourth-band-hard-count")) {
+    total = Math.min(total, 15);
+  }
+  return canonicalizeV6ScoreMetadata({ ...report, total, contentJudgements, issues, constraints });
 }
 
 export function assertV6SourceKeywords(stage2: V6Stage2, input: V6EvaluateInput) {
@@ -118,6 +130,13 @@ export function assertV6Report(report: V6FinalReport, input: V6EvaluateInput, st
 
   if (report.band === 5 && report.contentJudgements.some(item => HARD_STATUSES.has(item.status))) {
     fail("fifth-band-fuse");
+  }
+  if (
+    report.band === 5
+    && stage3
+    && stage3.draftJudgements.some(item => item.status !== "表现充分")
+  ) {
+    fail("fifth-band-stage3-gate");
   }
 
   const contentViolations: string[] = [];

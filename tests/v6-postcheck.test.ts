@@ -70,6 +70,18 @@ describe("V6 semantic postchecks", () => {
     expect(() => assertV6Report(candidate, input)).toThrow(/fifth-band-fuse/);
   });
 
+  it("requires every stage-three content judgement to clear fifth-band admission", () => {
+    const candidate = report();
+    candidate.total = 22;
+    candidate.band = 5;
+    candidate.bandRange = "21—25";
+    candidate.level = "第五档";
+    candidate.languagePlacement = "档内较低位";
+    candidate.contentJudgements.forEach(item => { item.status = "表现充分"; });
+
+    expect(() => assertV6Report(candidate, input, continuationAudit())).toThrow(/fifth-band-stage3-gate/);
+  });
+
   it("keeps reports with three hard content judgements out of the fourth band", () => {
     const candidate = report();
     candidate.contentJudgements[0].status = "明显问题";
