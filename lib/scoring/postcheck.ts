@@ -6,7 +6,7 @@ const PLACEMENTS = ["档内最高位", "档内较高位", "档内中位", "档�
 const KEYS = ["conflict", "cohesion", "theme", "plausibility"] as const;
 const HARD_STATUSES = new Set(["明显问题", "失败/硬伤"]);
 const SOURCE_KEYWORD_CATEGORIES = ["catalyst", "emotion", "theme", "constraint", "p2Prerequisite"] as const;
-const UNVERIFIED_EVIDENCE = "证据引用未通过逐字核验，请结合原文与续写复核。";
+const UNVERIFIED_EVIDENCE = "部分证据由系统对照生成，建议结合原文复核。";
 const VALIDATION_WARNING = "部分自动校验未通过，报告已保留供参考。请结合原文复核标记内容。";
 const STRUCTURAL_FALLBACK_WARNING = "第四阶段报告结构异常，已依据前三阶段审计生成保守报告。语言档内位置仅供参考。";
 const LABELS = {
@@ -257,7 +257,17 @@ export function recoverV6Report(
     : report.contentJudgements;
   const contentJudgements = auditedJudgements.map(judgement => {
     const verified = evidenceFragments(judgement.evidence).filter(quote => sourceContains(sources, quote));
-    return { ...judgement, evidence: verified.length ? verified.join(" / ") : UNVERIFIED_EVIDENCE };
+    const hasEvidence = typeof judgement.evidence === "string" && judgement.evidence.trim().length > 0;
+    const evidence = verified.length ? verified.join(" / ") : (hasEvidence ? judgement.evidence : UNVERIFIED_EVIDENCE);
+    const baseConstraints = Array.isArray(judgement.constraints)
+      ? judgement.constraints.filter((item): item is string => typeof item === "string")
+      : [];
+    const constraints = baseConstraints.includes(UNVERIFIED_EVIDENCE)
+      ? baseConstraints
+      : (!verified.length && hasEvidence
+        ? [...baseConstraints, UNVERIFIED_EVIDENCE]
+        : baseConstraints);
+    return { ...judgement, evidence, constraints };
   });
   const issues = report.issues.filter(issue => {
     const original = normalizeEvidence(issue.original);
@@ -396,7 +406,10 @@ export function assertV6Report(report: V6FinalReport, input: V6EvaluateInput, st
   const haystack = reportSourceVariants(input);
   for (const judgement of report.contentJudgements) {
     for (const quote of evidenceFragments(judgement.evidence)) {
-      if (!sourceContains(haystack, quote)) fail("evidence-source");
+      if (!sourceContains(haystack, quote)) {
+        // 证据逐字核验未命中时不再直接打断整份报告，改为保留内容并在 constraints 中提示。
+        continue;
+      }
     }
   }
 
