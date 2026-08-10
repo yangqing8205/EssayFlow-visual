@@ -10,22 +10,25 @@ import {
   assertV6Report,
   assertV6SourceKeywords,
   buildV6FallbackReport,
-  canonicalizeV6ScoreMetadata,
+  finalizeV6ScoreDecision,
   normalizeV6FinalCandidate,
   recoverV6Report,
   V6PostcheckError,
 } from "@/lib/scoring/postcheck";
 import { STAGE1_PROMPT, buildStage1Input } from "@/lib/prompts/v6/stage1";
 import { STAGE2_PROMPT, buildStage2Input } from "@/lib/prompts/v6/stage2";
-import { STAGE3_PROMPT, buildStage3Input } from "@/lib/prompts/v6/stage3";
+import { STAGE3_PROMPT, STAGE3_RECOVERY_PROMPT, buildStage3Input } from "@/lib/prompts/v6/stage3";
 import { STAGE4_PROMPT, buildStage4Input } from "@/lib/prompts/v6/stage4";
+import { normalizeV6StageCandidate } from "@/lib/workflow/v6/normalize";
 import {
-  V6FinalReportSchema,
+  V6Stage4DecisionSchema,
   V6Stage1Schema,
   V6Stage2Schema,
   V6Stage3Schema,
   type V6EvaluateInput,
   type V6FinalReport,
+  type V6Stage3,
+  type V6Stage4Decision,
   type V6StageEvent,
 } from "@/lib/workflow/v6/types";
 
@@ -53,28 +56,30 @@ function schemaDetail(error: z.ZodError) {
   return error.issues.slice(0, 8).map(issue => `${issue.path.join(".") || "root"}:${issue.message}`).join(";");
 }
 
-async function requestStage<T>(
+async function requestStage<TParsed, TResult = TParsed>(
   provider: LLMProvider,
   system: string,
   input: unknown,
-  schema: ZodType<T>,
+  schema: ZodType<TParsed>,
   options: CompletionOptions,
-  validate?: (value: T) => void,
-  normalize?: (value: T) => T,
-  recover?: (value: T, error: V6PostcheckError) => T,
+  validate?: (value: TResult) => void,
+  normalize?: (value: TParsed) => TResult,
+  recover?: (value: TResult, error: V6PostcheckError) => TResult,
   prepare?: (value: unknown) => unknown,
-  fallback?: (error: unknown) => T,
+  fallback?: (error: unknown) => TResult | Promise<TResult>,
 ) {
   let repairHint: string | undefined;
   let lastError: unknown;
-  let lastSchemaValidValue: T | undefined;
+  let lastSchemaValidValue: TResult | undefined;
   for (let attempt = 0; attempt < 2; attempt += 1) {
     const raw = await provider.complete(system, input, options, repairHint);
     try {
       const parsed = parseJson(raw);
       const result = schema.safeParse(prepare ? prepare(parsed) : parsed);
       if (!result.success) throw new ModelOutputInvalidError(schemaDetail(result.error));
-      const value = normalize ? normalize(result.data) : result.data;
+      const value: TResult = normalize
+        ? normalize(result.data)
+        : result.data as unknown as TResult;
       lastSchemaValidValue = value;
       validate?.(value);
       return value;
@@ -91,7 +96,7 @@ async function requestStage<T>(
   if (lastError instanceof V6PostcheckError && lastSchemaValidValue !== undefined) {
     return recover ? recover(lastSchemaValidValue, lastError) : lastSchemaValidValue;
   }
-  if (fallback) return fallback(lastError);
+  if (fallback) return await fallback(lastError);
   throw lastError;
 }
 
@@ -110,6 +115,10 @@ export async function runV6Pipeline(input: V6EvaluateInput, options: RunV6Option
     buildStage1Input(input),
     V6Stage1Schema,
     STAGE_OPTIONS[1],
+    undefined,
+    undefined,
+    undefined,
+    value => normalizeV6StageCandidate(value, 1),
   ));
   const stage2 = await run(2, () => requestStage(
     provider,
@@ -118,25 +127,49 @@ export async function runV6Pipeline(input: V6EvaluateInput, options: RunV6Option
     V6Stage2Schema,
     STAGE_OPTIONS[2],
     value => assertV6SourceKeywords(value, input),
+    undefined,
+    undefined,
+    value => normalizeV6StageCandidate(value, 2),
   ));
-  const stage3 = await run(3, () => requestStage(
+  const stage3 = await run(3, () => requestStage<V6Stage3, V6Stage3 | undefined>(
     provider,
     STAGE3_PROMPT,
     buildStage3Input(input, stage1, stage2),
     V6Stage3Schema,
     STAGE_OPTIONS[3],
+    undefined,
+    undefined,
+    undefined,
+    value => normalizeV6StageCandidate(value, 3),
+    async () => {
+      try {
+        return await requestStage(
+          provider,
+          STAGE3_RECOVERY_PROMPT,
+          buildStage3Input(input, stage1, stage2),
+          V6Stage3Schema,
+          { thinking: "disabled", maxCompletionTokens: 3000 },
+          undefined,
+          undefined,
+          undefined,
+          value => normalizeV6StageCandidate(value, 3),
+        );
+      } catch {
+        return undefined;
+      }
+    },
   ));
-  const report = await run(4, () => requestStage(
+  const report = await run(4, () => requestStage<V6Stage4Decision, V6FinalReport>(
     provider,
     STAGE4_PROMPT,
     buildStage4Input(input, stage1, stage2, stage3),
-    V6FinalReportSchema,
+    V6Stage4DecisionSchema,
     STAGE_OPTIONS[4],
     report => assertV6Report(report, input, stage3),
-    canonicalizeV6ScoreMetadata,
+    report => finalizeV6ScoreDecision(report, stage3, !stage3),
     (report, error) => recoverV6Report(report, input, error, stage3),
-    value => normalizeV6FinalCandidate(value, stage2),
-    () => buildV6FallbackReport(input, stage2, stage3),
+    value => normalizeV6FinalCandidate(normalizeV6StageCandidate(value, 4), stage2),
+    stage3 ? () => buildV6FallbackReport(input, stage2, stage3) : undefined,
   ));
   return { ...report, modelVersion: provider.modelName };
 }

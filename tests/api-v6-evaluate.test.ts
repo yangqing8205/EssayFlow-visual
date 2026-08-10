@@ -128,7 +128,7 @@ describe("POST /api/v6/evaluate", () => {
     expect(body).not.toContain("sk-secret-value");
   });
 
-  it("returns a safe validation rule for production diagnostics", async () => {
+  it("keeps validation diagnostics out of the browser response", async () => {
     const handler = createV6EvaluateHandler({
       env,
       runPipeline: async () => {
@@ -139,7 +139,8 @@ describe("POST /api/v6/evaluate", () => {
     const body = await response.text();
 
     expect(body).toContain('"code":"MODEL_FORMAT_ERROR"');
-    expect(body).toContain('"diagnostic":"source-keyword-evidence"');
+    expect(body).not.toContain("source-keyword-evidence");
+    expect(body).not.toContain("diagnostic");
     expect(body).not.toContain(fixture.exam.sourceText);
   });
 });

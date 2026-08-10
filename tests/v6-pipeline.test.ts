@@ -107,7 +107,7 @@ describe("runV6Pipeline", () => {
     expect(provider.calls[2].repairHint).toContain("source-keyword-evidence");
   });
 
-  it("canonicalizes deterministic score metadata without another model call", async () => {
+  it("derives deterministic score metadata without another model call", async () => {
     const invalid = structuredClone(fixture.goodReport);
     invalid.languagePlacement = "档内较高位";
     invalid.band = 5;
@@ -117,7 +117,8 @@ describe("runV6Pipeline", () => {
 
     const report = await runV6Pipeline(parsed, { providerFactory: () => provider });
 
-    expect(report.languagePlacement).toBe("档内中位");
+    expect(report.languagePlacement).toBe("档内较高位");
+    expect(report.total).toBe(19);
     expect(report.band).toBe(4);
     expect(report.bandRange).toBe("16—20");
     expect(report.level).toBe("第四档");
@@ -132,9 +133,8 @@ describe("runV6Pipeline", () => {
     const report = await runV6Pipeline(parsed, { providerFactory: () => provider });
 
     expect(report.total).toBe(18);
-    expect(report.contentJudgements[0].evidence).toContain("未通过逐字核验");
-    expect(report.constraints).toContain("部分自动校验未通过，报告已保留供参考。请结合原文复核标记内容。");
-    expect(provider.calls).toHaveLength(5);
+    expect(report.contentJudgements[0].evidence).toBe(stage3.draftJudgements[0].evidence);
+    expect(provider.calls).toHaveLength(4);
   });
 
   it("returns a report but caps an invalid fifth-band result at the fourth-band ceiling", async () => {
@@ -149,15 +149,15 @@ describe("runV6Pipeline", () => {
 
     const report = await runV6Pipeline(parsed, { providerFactory: () => provider });
 
-    expect(report.total).toBe(20);
+    expect(report.total).toBe(17);
     expect(report.band).toBe(4);
     expect(report.bandRange).toBe("16—20");
     expect(report.level).toBe("第四档");
-    expect(report.languagePlacement).toBe("档内最高位");
+    expect(report.languagePlacement).toBe("档内较低位");
     expect(report.contentJudgements[0].status).toBe("轻微瑕疵");
     expect(report.contentJudgements[0].judgement).toBe(stage3.draftJudgements[0].judgement);
     expect(report.contentJudgements[2].status).toBe("轻微瑕疵");
-    expect(report.constraints).toContain("部分自动校验未通过，报告已保留供参考。请结合原文复核标记内容。");
+    expect(report.constraints).toContain("第五档准入条件未满足，已按内容审计调整为第四档。");
   });
 
   it("continues to a final report when source-keyword postchecks still fail after repair", async () => {
@@ -187,6 +187,37 @@ describe("runV6Pipeline", () => {
     expect(provider.calls).toHaveLength(4);
   });
 
+  it("accepts a stage-four decision without a free numeric score", async () => {
+    const decision = structuredClone(fixture.goodReport) as Record<string, unknown>;
+    delete decision.total;
+    delete decision.band;
+    delete decision.bandRange;
+    delete decision.level;
+    decision.contentBand = 4;
+    const provider = new QueueProvider(responses(decision));
+
+    const report = await runV6Pipeline(parsed, { providerFactory: () => provider });
+
+    expect(report.total).toBe(18);
+    expect(report.band).toBe(4);
+    expect(provider.calls).toHaveLength(4);
+  });
+
+  it("normalizes common wrappers across all four stages", async () => {
+    const provider = new QueueProvider([
+      JSON.stringify({ stage1 }),
+      JSON.stringify({ sourceDirection: stage2 }),
+      JSON.stringify({ continuationAudit: stage3 }),
+      JSON.stringify({ report: fixture.goodReport }),
+    ]);
+
+    const report = await runV6Pipeline(parsed, { providerFactory: () => provider });
+
+    expect(report.total).toBe(18);
+    expect(report.contentJudgements).toHaveLength(4);
+    expect(provider.calls).toHaveLength(4);
+  });
+
   it("returns a conservative report when stage four stays structurally incomplete", async () => {
     const incomplete = { analysis: "The continuation generally follows the source story." };
     const provider = new QueueProvider([
@@ -205,5 +236,47 @@ describe("runV6Pipeline", () => {
     );
     expect(report.constraints).toContain("第四阶段报告结构异常，已依据前三阶段审计生成保守报告。语言档内位置仅供参考。");
     expect(provider.calls).toHaveLength(5);
+  });
+
+  it("uses a compact recovery request when stage three stays malformed", async () => {
+    const incomplete = { analysis: "The facts are generally consistent." };
+    const provider = new QueueProvider([
+      JSON.stringify(stage1),
+      JSON.stringify(stage2),
+      JSON.stringify(incomplete),
+      JSON.stringify(incomplete),
+      JSON.stringify(stage3),
+      JSON.stringify(fixture.goodReport),
+    ]);
+
+    const report = await runV6Pipeline(parsed, { providerFactory: () => provider });
+
+    expect(report.total).toBe(18);
+    expect(provider.calls).toHaveLength(6);
+    expect(provider.calls[4].options.maxCompletionTokens).toBeLessThan(provider.calls[2].options.maxCompletionTokens);
+  });
+
+  it("continues to stage four when both stage-three formats stay unusable", async () => {
+    const incomplete = { analysis: "The facts are generally consistent." };
+    const provider = new QueueProvider([
+      JSON.stringify(stage1),
+      JSON.stringify(stage2),
+      JSON.stringify(incomplete),
+      JSON.stringify(incomplete),
+      JSON.stringify(incomplete),
+      JSON.stringify(incomplete),
+      JSON.stringify(fixture.goodReport),
+    ]);
+
+    const report = await runV6Pipeline(parsed, { providerFactory: () => provider });
+
+    expect(report.total).toBe(18);
+    expect(report.constraints).toContain("第三阶段结构异常，第四阶段已重新执行续写事实核对。");
+    expect(provider.calls).toHaveLength(7);
+    expect(provider.calls[6].input).toMatchObject({
+      continuationAudit: {
+        status: "unavailable",
+      },
+    });
   });
 });

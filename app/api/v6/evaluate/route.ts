@@ -31,11 +31,11 @@ function jsonError(error: EvaluationAccessError, origin?: string) {
 function safeStreamError(error: unknown) {
   if (error instanceof ModelOutputInvalidError || error instanceof V6PostcheckError) {
     const diagnostic = error instanceof V6PostcheckError ? error.rule : error.detail;
+    console.error("[v6-evaluation-validation]", diagnostic);
     return {
       type: "error",
       code: "MODEL_FORMAT_ERROR",
-      message: "模型结果未通过评分规则校验，请重试",
-      diagnostic,
+      message: "本次分析未能自动恢复，请重新评测",
     };
   }
   if (error instanceof ModelCallFailedError) {

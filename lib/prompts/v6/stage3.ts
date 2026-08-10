@@ -8,6 +8,11 @@ export const STAGE3_PROMPT = `你正在执行 EssayFlow v6 的第三阶段：把
 输出结构：
 {"factChecks":[{"claim":"核对项","status":"consistent|conflict|not-established","evidence":"逐字证据"}],"draftJudgements":[{"key":"conflict|cohesion|theme|plausibility","status":"表现充分|轻微瑕疵|明显问题|失败/硬伤","judgement":"初步判断","evidence":"逐字证据"}]}`;
 
+export const STAGE3_RECOVERY_PROMPT = `把输入中的原文事实、故事方向和学生续写整理为下面的 JSON。不要输出标题、解释或外层对象。
+factChecks 可以为空数组；draftJudgements 必须恰好四项并依次使用 conflict、cohesion、theme、plausibility。
+status 只能是 表现充分、轻微瑕疵、明显问题、失败/硬伤。evidence 必须逐字来自输入。
+{"factChecks":[{"claim":"核对项","status":"consistent|conflict|not-established","evidence":"逐字证据"}],"draftJudgements":[{"key":"conflict|cohesion|theme|plausibility","status":"表现充分|轻微瑕疵|明显问题|失败/硬伤","judgement":"判断","evidence":"逐字证据"}]}`;
+
 export function buildStage3Input(input: V6EvaluateInput, stage1: V6Stage1, stage2: V6Stage2) {
   return {
     ...input,

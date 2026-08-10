@@ -15,8 +15,9 @@ describe("public evaluation page", () => {
     expect(html).not.toContain("essayflow-beta-code");
   });
 
-  it("shows the safe validation diagnostic when an evaluation fails", () => {
-    expect(html).toContain("event.diagnostic");
-    expect(html).toContain("错误编号：");
+  it("does not expose internal validation diagnostics in the browser", () => {
+    expect(html).not.toContain("event.diagnostic");
+    expect(html).not.toContain("错误编号：");
+    expect(html).toContain("event.message || '评测未完成，请重试。'");
   });
 });

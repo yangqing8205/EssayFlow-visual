@@ -1,4 +1,4 @@
-import type { V6EvaluateInput, V6FinalReport, V6Stage2, V6Stage3 } from "@/lib/workflow/v6/types";
+import type { V6EvaluateInput, V6FinalReport, V6Stage2, V6Stage3, V6Stage4Decision } from "@/lib/workflow/v6/types";
 
 const LEVELS = ["", "第一档", "第二档", "第三档", "第四档", "第五档"] as const;
 const RANGES = ["", "1—5", "6—10", "11—15", "16—20", "21—25"] as const;
@@ -21,6 +21,16 @@ const SUGGESTIONS = {
   theme: "让人物认知变化通过具体行动自然呈现。",
   plausibility: "复核原文事实、人物动机和关键因果关系。",
 } as const;
+const PLACEMENT_POINTS: Record<V6FinalReport["languagePlacement"], number> = {
+  "档内最高位": 5,
+  "档内较高位": 4,
+  "档内中位": 3,
+  "档内较低位": 2,
+  "档内最低位": 1,
+};
+const FIFTH_BAND_ADJUSTMENT = "第五档准入条件未满足，已按内容审计调整为第四档。";
+const FOURTH_BAND_ADJUSTMENT = "第四档内容条件未满足，已按内容审计调整为第三档。";
+export const STAGE3_RECOVERY_WARNING = "第三阶段结构异常，第四阶段已重新执行续写事实核对。";
 
 export class V6PostcheckError extends Error {
   constructor(readonly rule: string) {
@@ -121,6 +131,44 @@ export function canonicalizeV6ScoreMetadata(report: V6FinalReport): V6FinalRepor
     bandRange: RANGES[band],
     level: LEVELS[band],
     languagePlacement: expectedPlacement(report.total),
+  };
+}
+
+/** 模型判断内容档位与语言位置，最终数字由服务端确定，避免三者互相矛盾。 */
+export function finalizeV6ScoreDecision(
+  report: V6Stage4Decision,
+  stage3?: V6Stage3,
+  recoveredStage3 = false,
+): V6FinalReport {
+  const contentJudgements = report.contentJudgements.map(judgement => {
+    const audited = stage3?.draftJudgements.find(item => item.key === judgement.key);
+    return audited && audited.status !== "表现充分"
+      ? { ...judgement, status: audited.status, judgement: audited.judgement, evidence: audited.evidence }
+      : judgement;
+  });
+  const constraints = [...report.constraints];
+  if (recoveredStage3 && !constraints.includes(STAGE3_RECOVERY_WARNING)) {
+    constraints.push(STAGE3_RECOVERY_WARNING);
+  }
+  let band = report.contentBand ?? report.band ?? Math.ceil((report.total ?? 18) / 5);
+  if (band === 5 && contentJudgements.some(item => item.status !== "表现充分")) {
+    band = 4;
+    if (!constraints.includes(FIFTH_BAND_ADJUSTMENT)) constraints.push(FIFTH_BAND_ADJUSTMENT);
+  }
+  const hardCount = contentJudgements.filter(item => HARD_STATUSES.has(item.status)).length;
+  if (band === 4 && hardCount >= 3) {
+    band = 3;
+    if (!constraints.includes(FOURTH_BAND_ADJUSTMENT)) constraints.push(FOURTH_BAND_ADJUSTMENT);
+  }
+  const total = (band - 1) * 5 + PLACEMENT_POINTS[report.languagePlacement];
+  return {
+    ...report,
+    total,
+    band,
+    bandRange: RANGES[band],
+    level: LEVELS[band],
+    contentJudgements,
+    constraints,
   };
 }
 

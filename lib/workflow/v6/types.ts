@@ -56,6 +56,20 @@ export const V6FinalReportSchema = z.object({
   modelVersion: z.string().optional(),
 });
 
+export const V6Stage4DecisionSchema = V6FinalReportSchema.omit({
+  total: true,
+  band: true,
+  bandRange: true,
+  level: true,
+  modelVersion: true,
+}).extend({
+  contentBand: z.number().int().min(1).max(5).optional(),
+  band: z.number().int().min(1).max(5).optional(),
+  total: z.number().int().min(1).max(25).optional(),
+}).refine(value => value.contentBand !== undefined || value.band !== undefined || value.total !== undefined, {
+  message: "缺少内容档位判断",
+});
+
 export const V6EvaluateInputSchema = z.object({
   sourceText: z.string().min(60, "未能识别完整阅读原文").max(15_000, "原文过长"),
   starter1: z.string().min(5, "未能识别第一段给定首句").max(1_000, "第一段首句过长"),
@@ -111,6 +125,7 @@ export const V6Stage3Schema = z.object({
 
 export type V6EvaluateInput = z.infer<typeof V6EvaluateInputSchema>;
 export type V6FinalReport = z.infer<typeof V6FinalReportSchema>;
+export type V6Stage4Decision = z.infer<typeof V6Stage4DecisionSchema>;
 export type V6Stage1 = z.infer<typeof V6Stage1Schema>;
 export type V6Stage2 = z.infer<typeof V6Stage2Schema>;
 export type V6Stage3 = z.infer<typeof V6Stage3Schema>;

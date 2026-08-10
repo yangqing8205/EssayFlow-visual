@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import fixture from "@/tests/fixtures/v6-real-essay.json";
-import { assertV6Report, assertV6SourceKeywords } from "@/lib/scoring/postcheck";
+import { assertV6Report, assertV6SourceKeywords, finalizeV6ScoreDecision } from "@/lib/scoring/postcheck";
 import { V6FinalReportSchema, V6Stage2Schema, V6Stage3Schema } from "@/lib/workflow/v6/types";
 
 const input = {
@@ -80,6 +80,37 @@ describe("V6 semantic postchecks", () => {
     candidate.contentJudgements.forEach(item => { item.status = "表现充分"; });
 
     expect(() => assertV6Report(candidate, input, continuationAudit())).toThrow(/fifth-band-stage3-gate/);
+  });
+
+  it("derives the numeric score from content band and language placement", () => {
+    const candidate = report();
+    candidate.total = 22;
+    candidate.band = 4;
+    candidate.languagePlacement = "档内中位";
+
+    const finalized = finalizeV6ScoreDecision(candidate);
+
+    expect(finalized.band).toBe(4);
+    expect(finalized.total).toBe(18);
+    expect(finalized.bandRange).toBe("16—20");
+  });
+
+  it("downgrades an unqualified fifth-band decision and keeps the stage-three audit", () => {
+    const candidate = report();
+    candidate.total = 22;
+    candidate.band = 5;
+    candidate.bandRange = "21—25";
+    candidate.level = "第五档";
+    candidate.languagePlacement = "档内较低位";
+    candidate.contentJudgements.forEach(item => { item.status = "表现充分"; });
+
+    const finalized = finalizeV6ScoreDecision(candidate, continuationAudit());
+
+    expect(finalized.band).toBe(4);
+    expect(finalized.total).toBe(17);
+    expect(finalized.contentJudgements[0].status).toBe("明显问题");
+    expect(finalized.contentJudgements[1].status).toBe("轻微瑕疵");
+    expect(finalized.constraints).toContain("第五档准入条件未满足，已按内容审计调整为第四档。");
   });
 
   it("keeps reports with three hard content judgements out of the fourth band", () => {
