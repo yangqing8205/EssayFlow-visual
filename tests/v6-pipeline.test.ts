@@ -154,6 +154,9 @@ describe("runV6Pipeline", () => {
     expect(report.bandRange).toBe("16—20");
     expect(report.level).toBe("第四档");
     expect(report.languagePlacement).toBe("档内最高位");
+    expect(report.contentJudgements[0].status).toBe("轻微瑕疵");
+    expect(report.contentJudgements[0].judgement).toBe(stage3.draftJudgements[0].judgement);
+    expect(report.contentJudgements[2].status).toBe("轻微瑕疵");
     expect(report.constraints).toContain("部分自动校验未通过，报告已保留供参考。请结合原文复核标记内容。");
   });
 

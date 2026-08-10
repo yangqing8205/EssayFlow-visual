@@ -76,10 +76,20 @@ export function recoverV6Report(
   report: V6FinalReport,
   input: V6EvaluateInput,
   error?: V6PostcheckError,
+  stage3?: V6Stage3,
 ): V6FinalReport {
   const sources = reportSourceVariants(input);
   const locked = [normalizeEvidence(input.starter1), normalizeEvidence(input.starter2)];
-  const contentJudgements = report.contentJudgements.map(judgement => {
+  const rules = new Set(error?.rule.split(",") ?? []);
+  const auditedJudgements = rules.has("fifth-band-stage3-gate") && stage3
+    ? report.contentJudgements.map(judgement => {
+        const audited = stage3.draftJudgements.find(item => item.key === judgement.key);
+        return audited
+          ? { ...judgement, status: audited.status, judgement: audited.judgement, evidence: audited.evidence }
+          : judgement;
+      })
+    : report.contentJudgements;
+  const contentJudgements = auditedJudgements.map(judgement => {
     const verified = evidenceFragments(judgement.evidence).filter(quote => sourceContains(sources, quote));
     return { ...judgement, evidence: verified.length ? verified.join(" / ") : UNVERIFIED_EVIDENCE };
   });
@@ -90,7 +100,6 @@ export function recoverV6Report(
   const constraints = report.constraints.includes(VALIDATION_WARNING)
     ? report.constraints
     : [...report.constraints, VALIDATION_WARNING];
-  const rules = new Set(error?.rule.split(",") ?? []);
   let total = report.total;
   if (rules.has("fifth-band-fuse") || rules.has("fifth-band-stage3-gate")) {
     total = Math.min(total, 20);
