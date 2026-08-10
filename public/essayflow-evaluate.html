@@ -72,6 +72,7 @@
     .result-content[hidden] { display:none; }
     .result-copy { width:100%; min-width:0; max-width:900px; }
     .result-summary { margin:0 0 42px; font:26px/1.55 var(--serif); }
+    .result-warning { margin:-24px 0 36px; color:var(--gray-dark); font-size:14px; line-height:1.7; }
     .judgements { border-top:1px solid var(--line); }
     .judgement { display:grid; grid-template-columns:150px 1fr; gap:30px; padding:28px 0; border-bottom:1px solid var(--line); }
     .judgement-meta { color:var(--blue); font-size:13px; font-weight:800; }
@@ -139,7 +140,7 @@
       <div class="section-label"><span class="section-number">05</span><h2>评测结果</h2><p>内容决定档位，语言决定它落在这一档的什么位置。</p></div>
       <div class="result-preview" id="resultWaiting"><div class="result-score"><strong>—</strong><span>等待提交续写</span></div><div class="result-lines" aria-hidden="true"><span></span><span></span><span></span><span></span></div></div>
       <div class="result-content" id="resultContent" hidden>
-        <div class="result-preview"><div class="result-score"><strong data-result-score>—</strong><span data-result-band></span></div><div class="result-copy"><p class="result-summary" data-result-summary></p><div class="judgements" data-result-judgements></div><section class="language-report"><h3>语言档内位置</h3><p data-language-rationale></p><div data-language-issues></div></section></div></div>
+        <div class="result-preview"><div class="result-score"><strong data-result-score>—</strong><span data-result-band></span></div><div class="result-copy"><p class="result-summary" data-result-summary></p><p class="result-warning" data-result-warning hidden></p><div class="judgements" data-result-judgements></div><section class="language-report"><h3>语言档内位置</h3><p data-language-rationale></p><div data-language-issues></div></section></div></div>
       </div>
     </section>
   </main>
@@ -209,6 +210,10 @@
       resultContent.querySelector('[data-result-score]').textContent = report.total;
       resultContent.querySelector('[data-result-band]').textContent = `${report.level} · ${report.bandRange} · ${report.languagePlacement}`;
       resultContent.querySelector('[data-result-summary]').textContent = report.summary;
+      const warning = resultContent.querySelector('[data-result-warning]');
+      const validationWarning = report.constraints?.find((item) => item.includes('部分自动校验未通过'));
+      warning.hidden = !validationWarning;
+      warning.textContent = validationWarning || '';
       const judgements = resultContent.querySelector('[data-result-judgements]');
       judgements.replaceChildren();
       report.contentJudgements.forEach((item, index) => {

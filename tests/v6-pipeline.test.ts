@@ -124,12 +124,33 @@ describe("runV6Pipeline", () => {
     expect(provider.calls).toHaveLength(4);
   });
 
-  it("fails after one unsuccessful repair", async () => {
+  it("preserves a complete report after an unsuccessful evidence repair", async () => {
     const invalid = structuredClone(fixture.goodReport);
     invalid.contentJudgements[0].evidence = "evidence invented by the model";
     const provider = new QueueProvider([...responses(invalid), JSON.stringify(invalid)]);
 
-    await expect(runV6Pipeline(parsed, { providerFactory: () => provider })).rejects.toThrow(/evidence-source/);
+    const report = await runV6Pipeline(parsed, { providerFactory: () => provider });
+
+    expect(report.total).toBe(18);
+    expect(report.contentJudgements[0].evidence).toContain("未通过逐字核验");
+    expect(report.constraints).toContain("部分自动校验未通过，报告已保留供参考。请结合原文复核标记内容。");
+    expect(provider.calls).toHaveLength(5);
+  });
+
+  it("continues to a final report when source-keyword postchecks still fail after repair", async () => {
+    const invalidStage2 = structuredClone(stage2);
+    invalidStage2.sourceKeywords[0].quote = "rain invented by the model";
+    const provider = new QueueProvider([
+      JSON.stringify(stage1),
+      JSON.stringify(invalidStage2),
+      JSON.stringify(invalidStage2),
+      JSON.stringify(stage3),
+      JSON.stringify(fixture.goodReport),
+    ]);
+
+    const report = await runV6Pipeline(parsed, { providerFactory: () => provider });
+
+    expect(report.total).toBe(18);
     expect(provider.calls).toHaveLength(5);
   });
 });

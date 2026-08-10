@@ -6,6 +6,8 @@ const PLACEMENTS = ["档内最高位", "档内较高位", "档内中位", "档�
 const KEYS = ["conflict", "cohesion", "theme", "plausibility"] as const;
 const HARD_STATUSES = new Set(["明显问题", "失败/硬伤"]);
 const SOURCE_KEYWORD_CATEGORIES = ["catalyst", "emotion", "theme", "constraint", "p2Prerequisite"] as const;
+const UNVERIFIED_EVIDENCE = "证据引用未通过逐字核验，请结合原文与续写复核。";
+const VALIDATION_WARNING = "部分自动校验未通过，报告已保留供参考。请结合原文复核标记内容。";
 
 export class V6PostcheckError extends Error {
   constructor(readonly rule: string) {
@@ -53,6 +55,38 @@ function normalizedSourceVariants(value: string) {
     .replace(/（[^）]*[\u3400-\u9fff][^）]*）/g, "")
     .replace(/\([^)]*[\u3400-\u9fff][^)]*\)/g, "");
   return [normalizeEvidence(value), normalizeEvidence(withoutChineseGloss)];
+}
+
+function reportSourceVariants(input: V6EvaluateInput) {
+  return normalizedSourceVariants([
+    input.sourceText,
+    input.starter1,
+    input.studentParagraph1,
+    input.starter2,
+    input.studentParagraph2,
+  ].join("\n"));
+}
+
+function sourceContains(sources: string[], quote: string) {
+  const normalized = normalizeEvidence(quote);
+  return sources.some(source => source.includes(normalized));
+}
+
+export function recoverV6Report(report: V6FinalReport, input: V6EvaluateInput): V6FinalReport {
+  const sources = reportSourceVariants(input);
+  const locked = [normalizeEvidence(input.starter1), normalizeEvidence(input.starter2)];
+  const contentJudgements = report.contentJudgements.map(judgement => {
+    const verified = evidenceFragments(judgement.evidence).filter(quote => sourceContains(sources, quote));
+    return { ...judgement, evidence: verified.length ? verified.join(" / ") : UNVERIFIED_EVIDENCE };
+  });
+  const issues = report.issues.filter(issue => {
+    const original = normalizeEvidence(issue.original);
+    return !locked.some(starter => starter.includes(original));
+  });
+  const constraints = report.constraints.includes(VALIDATION_WARNING)
+    ? report.constraints
+    : [...report.constraints, VALIDATION_WARNING];
+  return { ...report, contentJudgements, issues, constraints };
 }
 
 export function assertV6SourceKeywords(stage2: V6Stage2, input: V6EvaluateInput) {
@@ -118,16 +152,10 @@ export function assertV6Report(report: V6FinalReport, input: V6EvaluateInput, st
   const keys = report.contentJudgements.map(item => item.key);
   if (keys.some((key, index) => key !== KEYS[index])) fail("content-keys");
 
-  const haystack = normalizeEvidence([
-    input.sourceText,
-    input.starter1,
-    input.studentParagraph1,
-    input.starter2,
-    input.studentParagraph2,
-  ].join("\n"));
+  const haystack = reportSourceVariants(input);
   for (const judgement of report.contentJudgements) {
     for (const quote of evidenceFragments(judgement.evidence)) {
-      if (!haystack.includes(normalizeEvidence(quote))) fail("evidence-source");
+      if (!sourceContains(haystack, quote)) fail("evidence-source");
     }
   }
 
