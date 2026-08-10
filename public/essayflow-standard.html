@@ -1,0 +1,354 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>EssayFlow · 19 分评分实录</title>
+  <link rel="stylesheet" href="vendor/lenis.css">
+  <style>
+    :root {
+      --ink: #111;
+      --blue: #1847ff;
+      --gray: #a9aaaf;
+      --gray-dark: #55565b;
+      --gray-light: #e4e4e5;
+      --line: #dedfe3;
+      --soft: #f7f8fc;
+      --serif: "Iowan Old Style", "Palatino Linotype", Baskerville, Georgia, serif;
+      --sans: "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+    }
+
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; scroll-snap-type: y proximity; background: #fff; }
+    body { margin: 0; color: var(--ink); background: #fff; font-family: var(--sans); overflow-x: hidden; }
+    button { font: inherit; }
+    .progress { position: fixed; inset: 0 0 auto; z-index: 100; height: 4px; pointer-events: none; }
+    .progress span { display: block; width: 0; height: 100%; background: var(--blue); }
+    .topbar { position: fixed; top: 25px; left: 3.5vw; right: 3.5vw; z-index: 90; display: flex; justify-content: space-between; font-weight: 700; }
+    .topbar a { color: inherit; text-decoration: none; border-bottom: 1px solid currentColor; padding-bottom: 3px; }
+
+    .screen { position: relative; display: grid; align-items: center; min-height: 100svh; padding: 11vh 8vw 9vh; scroll-snap-align: start; overflow: hidden; background: #fff; }
+    .screen.tall { min-height: 118svh; height: auto; overflow: visible; }
+    .screen.soft { background: var(--soft); }
+    .screen.blue-screen { color: #fff; background: var(--blue); }
+    .inner { width: min(1420px, 100%); margin: 0 auto; }
+    .eyebrow { margin: 0 0 22px; color: var(--blue); font-size: 13px; font-weight: 800; letter-spacing: .16em; text-transform: uppercase; }
+    .blue-screen .eyebrow { color: #fff; opacity: .72; }
+    h1, h2, h3, p { margin-top: 0; }
+    h1, h2, .serif { font-family: var(--serif); }
+    h1 { margin-bottom: 28px; font-size: clamp(68px, 8vw, 148px); font-weight: 500; line-height: .88; letter-spacing: -.065em; }
+    h2 { margin-bottom: 30px; font-size: clamp(48px, 5.5vw, 100px); font-weight: 500; line-height: .94; letter-spacing: -.055em; }
+    .lead { max-width: 850px; color: var(--gray-dark); font-size: clamp(18px, 1.45vw, 27px); line-height: 1.65; }
+    .blue { color: var(--blue); }
+    .muted { color: var(--gray); }
+    .reveal { opacity: 0; transform: translateY(24px); transition: opacity .75s ease, transform .75s cubic-bezier(.2,.75,.2,1); }
+    .screen.is-visible .reveal { opacity: 1; transform: none; }
+    .screen.is-visible .delay-1 { transition-delay: 90ms; }
+    .screen.is-visible .delay-2 { transition-delay: 180ms; }
+    .screen.is-visible .delay-3 { transition-delay: 270ms; }
+    .down { position: absolute; left: 50%; bottom: 18px; border: 0; padding: 8px 18px; color: inherit; background: transparent; font: 42px/1 var(--serif); transform: translateX(-50%); cursor: pointer; animation: breathe 1.8s ease-in-out infinite; }
+    @keyframes breathe { 50% { transform: translate(-50%, 7px); } }
+
+    .question-wrap { width: min(1050px, 100%); margin: 0 auto; }
+    .question-title { margin-bottom: 6vh; text-align: center; }
+    .question-title h1 { font-size: clamp(62px, 7vw, 128px); }
+    .choices { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+    .choice { min-height: 145px; padding: 22px; border: 1px solid var(--line); color: var(--ink); background: #fff; text-align: left; line-height: 1.6; cursor: pointer; transition: border-color .2s, background .2s, transform .2s; }
+    .choice:hover, .choice:focus-visible { border-color: var(--blue); transform: translateY(-2px); outline: 3px solid rgb(24 71 255 / 12%); }
+    .choice[aria-pressed="true"] { border-color: var(--blue); background: #f1f4ff; }
+    .choice b { display: block; margin-bottom: 12px; color: var(--blue); font: 26px/1 var(--serif); }
+    .answer { max-width: 780px; margin: 24px auto 0; padding: 19px 22px; border-left: 3px solid var(--blue); background: var(--soft); color: var(--gray-dark); font-size: 17px; line-height: 1.7; }
+    .answer[hidden], .continue[hidden] { display: none; }
+    .continue { margin-top: 20px; color: var(--blue); text-align: center; font-size: 14px; font-weight: 800; letter-spacing: .08em; }
+
+    .trajectory-layout { display: grid; grid-template-columns: .82fr 1.18fr; gap: 9vw; align-items: center; }
+    .trajectory-copy { max-width: 540px; }
+    .trajectory { position: relative; padding-left: 62px; }
+    .trajectory::before { content: ""; position: absolute; left: 18px; top: 30px; bottom: 30px; width: 1px; background: var(--line); }
+    .trajectory-step { position: relative; min-height: 190px; padding: 18px 0 36px; opacity: .34; transform: translateY(12px); transition: opacity .6s, transform .6s; }
+    .trajectory-step::before { content: ""; position: absolute; left: -50px; top: 28px; width: 13px; height: 13px; border: 2px solid var(--gray); border-radius: 50%; background: #fff; }
+    .trajectory-step.active { opacity: 1; transform: none; }
+    .trajectory-step.active::before { border-color: var(--blue); background: var(--blue); }
+    .trajectory-step:last-child { color: var(--blue); }
+    .trajectory-step span { display: block; margin-bottom: 12px; font: 20px/1 var(--serif); }
+    .trajectory-step p { margin: 0; font-size: clamp(17px, 1.25vw, 23px); line-height: 1.65; }
+
+    .essay-shell { border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+    .essay-part { display: grid; grid-template-columns: 290px 1fr; border-bottom: 1px solid var(--line); }
+    .essay-part:last-child { border-bottom: 0; }
+    .starter { padding: 28px; color: var(--blue); background: #f2f4ff; font: 700 19px/1.5 var(--serif); }
+    .student-text { padding: 28px 36px; font: clamp(17px, 1.25vw, 22px)/1.75 var(--serif); }
+    .given-note { margin: 18px 0 0; color: var(--gray-dark); font-size: 14px; }
+    .handoff { margin-top: 7vh; font: clamp(30px, 3.2vw, 58px)/1.2 var(--serif); }
+
+    .lock-layout { display: grid; grid-template-columns: .8fr 1.2fr; gap: 8vw; align-items: center; }
+    .lock-box { position: relative; padding: 36px; border: 1px solid var(--line); background: #fff; }
+    .lock-label { display: inline-block; margin-bottom: 26px; padding: 7px 10px; border: 1px solid var(--blue); color: var(--blue); font-size: 12px; font-weight: 800; letter-spacing: .1em; }
+    .lock-box::after { content: "学生续写暂不可见"; position: absolute; top: 22px; right: 24px; color: var(--gray); font-size: 12px; }
+    .fact-list { margin: 0; padding: 0; list-style: none; }
+    .fact-list li { padding: 17px 0; border-top: 1px solid var(--line); font-size: clamp(17px, 1.2vw, 22px); line-height: 1.5; }
+    .fact-list li::before { content: "·"; margin-right: 12px; color: var(--blue); }
+
+    .direction-grid { display: grid; grid-template-columns: repeat(3, 1fr); margin-top: 6vh; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+    .direction-item { min-height: 300px; padding: 28px; border-right: 1px solid var(--line); }
+    .direction-item:last-child { border-right: 0; color: #fff; background: var(--blue); }
+    .direction-item b { display: block; margin-bottom: 45px; color: var(--blue); font-size: 13px; letter-spacing: .1em; }
+    .direction-item:last-child b { color: rgb(255 255 255 / 65%); }
+    .direction-item p, .direction-item ul { margin: 0; font-size: clamp(16px, 1.1vw, 21px); line-height: 1.7; }
+    .direction-item ul { padding-left: 20px; }
+
+    .evidence-good { display: grid; grid-template-columns: .72fr 1.28fr; gap: 7vw; align-items: start; margin-bottom: 8vh; }
+    .action-list { margin: 0; padding: 0; list-style: none; }
+    .action-list li { padding: 17px 0; border-top: 1px solid var(--line); font-size: 19px; }
+    .action-list li::before { content: "✓"; margin-right: 12px; color: var(--blue); }
+    .quote-stack blockquote { margin: 0 0 16px; padding: 24px; border-left: 2px solid var(--blue); background: #fff; font: clamp(21px, 1.7vw, 31px)/1.5 var(--serif); }
+    .collision { display: grid; grid-template-columns: 1fr auto 1fr; gap: 30px; align-items: stretch; padding-top: 5vh; border-top: 1px solid var(--line); }
+    .collision-card { padding: 30px; border: 1px solid var(--line); background: #fff; }
+    .collision-card.bad { border-color: var(--blue); }
+    .collision-card span { display: block; margin-bottom: 28px; color: var(--gray-dark); font-size: 12px; font-weight: 800; letter-spacing: .1em; }
+    .collision-card q { font: clamp(25px, 2.4vw, 46px)/1.15 var(--serif); }
+    .collision-mark { align-self: center; color: var(--blue); font: 54px/1 var(--serif); }
+    .collision-explain { max-width: 900px; margin: 30px auto 0; font-size: clamp(18px, 1.45vw, 27px); line-height: 1.65; text-align: center; }
+
+    .judgement-list { margin-top: 5vh; border-top: 1px solid var(--line); }
+    .judgement { display: grid; grid-template-columns: 210px 1fr; gap: 35px; min-height: 235px; padding: 32px 0; border-bottom: 1px solid var(--line); opacity: .26; transform: translateX(10px); transition: opacity .55s, transform .55s; }
+    .judgement.active { opacity: 1; transform: none; }
+    .judgement-meta span { display: inline-block; padding: 6px 9px; border: 1px solid currentColor; color: var(--blue); font-size: 12px; font-weight: 800; }
+    .judgement.problem .judgement-meta span { color: var(--gray-dark); }
+    .judgement h3 { margin: 14px 0 0; font: 34px/1 var(--serif); }
+    .judgement p { margin: 0; max-width: 850px; color: var(--gray-dark); font-size: clamp(18px, 1.35vw, 25px); line-height: 1.65; }
+    .principle { margin-top: 5vh; padding: 28px; color: #fff; background: var(--blue); font-size: clamp(22px, 1.8vw, 34px); line-height: 1.5; }
+
+    .ceiling-list { width: min(960px, 100%); margin: 5vh auto; border-top: 1px solid var(--line); }
+    .ceiling-row { display: grid; grid-template-columns: 1fr 210px; padding: 21px 0; border-bottom: 1px solid var(--line); font-size: clamp(22px, 2vw, 36px); }
+    .ceiling-row span:last-child { color: var(--blue); font-family: var(--serif); text-align: right; }
+    .ceiling-row:last-child span:last-child { color: var(--ink); }
+    .ceiling-stop { margin: 7vh 0 2vh; color: var(--blue); font: clamp(54px, 7vw, 128px)/.9 var(--serif); text-align: center; letter-spacing: -.05em; }
+    .band { text-align: center; font-size: clamp(21px, 2vw, 36px); }
+
+    .language-layout { display: grid; grid-template-columns: .72fr 1.28fr; gap: 8vw; align-items: start; }
+    .placement { position: sticky; top: 16vh; }
+    .placement-big { color: var(--blue); font: clamp(58px, 7vw, 124px)/.9 var(--serif); letter-spacing: -.05em; }
+    .placement p { margin-top: 28px; color: var(--gray-dark); line-height: 1.75; }
+    .case { padding: 28px 0; border-top: 1px solid var(--line); }
+    .case:last-child { border-bottom: 1px solid var(--line); }
+    .case-tag { color: var(--blue); font-size: 12px; font-weight: 800; letter-spacing: .1em; }
+    .case blockquote { margin: 14px 0; font: clamp(20px, 1.7vw, 29px)/1.5 var(--serif); }
+    .case p { color: var(--gray-dark); line-height: 1.65; }
+    .rewrite-toggle { padding: 8px 0; border: 0; border-bottom: 1px solid currentColor; color: var(--blue); background: transparent; font-weight: 800; cursor: pointer; }
+    .rewrite-toggle:focus-visible { outline: 3px solid rgb(24 71 255 / 15%); }
+    .rewrite { margin-top: 15px; padding: 17px; background: #eef1ff; color: var(--blue) !important; }
+    .rewrite[hidden] { display: none; }
+
+    .score-screen { place-items: center; text-align: center; }
+    .score-number { margin: 0; font: 500 clamp(230px, 35vw, 600px)/.68 var(--serif); letter-spacing: -.13em; }
+    .score-meta { margin-top: 7vh; font-size: clamp(20px, 2vw, 36px); }
+    .score-summary { max-width: 900px; margin: 28px auto 0; color: rgb(255 255 255 / 78%); font-size: clamp(16px, 1.25vw, 22px); line-height: 1.75; }
+
+    .pipeline { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-top: 7vh; }
+    .pipeline-step { min-height: 235px; padding: 24px; border: 1px solid var(--line); }
+    .pipeline-step b { display: block; margin-bottom: 35px; color: var(--blue); }
+    .pipeline-step p { margin: 0; line-height: 1.65; }
+    .pipeline-lock { display: inline-block; margin-top: 18px; padding: 6px 9px; border: 1px solid var(--blue); color: var(--blue); font-size: 12px; font-weight: 800; }
+    .tech-note { margin-top: 5vh; padding-top: 25px; border-top: 1px solid var(--line); color: var(--gray-dark); line-height: 1.7; }
+
+    .closing { text-align: center; }
+    .closing-question { margin: 0 0 6vh; color: var(--gray); font: clamp(38px, 4vw, 74px)/1.1 var(--serif); }
+    .closing h2 { max-width: 1100px; margin-left: auto; margin-right: auto; }
+    .cta { display: inline-flex; margin-top: 24px; padding: 17px 24px; color: #fff; background: var(--blue); text-decoration: none; font-weight: 800; }
+    .cta:hover, .cta:focus-visible { background: #0d35d7; outline: 3px solid #dce2ff; }
+
+    @media (max-width: 1024px) {
+      .screen { padding: 11vh 6vw 9vh; }
+      .trajectory-layout, .lock-layout, .evidence-good, .language-layout { grid-template-columns: 1fr; }
+      .choices { grid-template-columns: 1fr; }
+      .choice { min-height: 0; }
+      .essay-part { grid-template-columns: 240px 1fr; }
+      .placement { position: static; }
+      .pipeline { grid-template-columns: 1fr 1fr; }
+    }
+
+    @media (max-width: 768px) {
+      html { scroll-snap-type: none; }
+      .screen, .screen.tall { min-height: 100svh; height: auto; padding: 11vh 5vw 9vh; overflow: visible; }
+      .topbar { top: 17px; font-size: 13px; }
+      .essay-part, .judgement { grid-template-columns: 1fr; }
+      .starter { border-bottom: 1px solid var(--line); }
+      .direction-grid, .pipeline { grid-template-columns: 1fr; }
+      .direction-item { min-height: 0; border-right: 0; border-bottom: 1px solid var(--line); }
+      .direction-item:last-child { border-bottom: 0; }
+      .collision { grid-template-columns: 1fr; }
+      .collision-mark { transform: rotate(90deg); justify-self: center; }
+      .ceiling-row { grid-template-columns: 1fr 120px; }
+    }
+
+    @media (max-width: 390px) {
+      h1 { font-size: 18vw; }
+      h2 { font-size: 13vw; }
+      .question-title h1 { font-size: 15vw; }
+      .screen { padding-left: 20px; padding-right: 20px; }
+      .trajectory { padding-left: 48px; }
+      .trajectory-step::before { left: -36px; }
+      .essay-part .student-text, .starter { padding: 20px; }
+      .lock-box, .collision-card { padding: 22px; }
+      .score-number { font-size: 55vw; }
+      .ceiling-row { font-size: 21px; }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      html { scroll-behavior: auto; }
+      *, *::before, *::after { animation: none !important; transition-duration: .01ms !important; }
+    }
+  </style>
+</head>
+<body>
+  <div class="progress" aria-hidden="true"><span id="progressBar"></span></div>
+  <header class="topbar"><a href="essayflow-visual-prototype-v2.html">EssayFlow</a><span>19 分评分实录</span></header>
+  <main>
+    <section class="screen" id="s1">
+      <div class="question-wrap">
+        <div class="question-title reveal"><p class="eyebrow">你的判断</p><h1>他们争的真的是<br><span class="blue">一条狗吗？</span></h1></div>
+        <div class="choices reveal delay-1" id="conflictChoices">
+          <button class="choice" aria-pressed="false" data-feedback="这是冲突发生的表面形式，但还不足以解释两个月的沉默。"><b>A</b>哥哥不让弟弟的狗进屋，弟弟生气了</button>
+          <button class="choice" aria-pressed="false" data-feedback="狗承载了冲突，但真正被忽视的是弟弟。在失去妻子、身体又出现问题之后，Toby 是支撑他生活的陪伴。"><b>B</b>哥哥没有看见 Toby 对弟弟意味着什么</button>
+          <button class="choice" aria-pressed="false" data-feedback="暴雨触发了争执，却不是争执真正持续下去的原因。"><b>C</b>暴雨让屋外无法继续待下去</button>
+        </div>
+        <div class="answer" id="conflictAnswer" hidden></div>
+        <div class="continue" id="conflictContinue" hidden>继续向下，看 EssayFlow 如何判断 ↓</div>
+      </div>
+    </section>
+
+    <section class="screen tall soft" id="s2">
+      <div class="inner trajectory-layout">
+        <div class="trajectory-copy reveal"><p class="eyebrow">原文把人物带到了哪里</p><h2>原文已经完成了一次<span class="blue">认知转变</span>。</h2><p class="lead">续写不能重新从“狗能不能进屋”开始，它只能从这个终点继续向前。</p></div>
+        <div class="trajectory" id="trajectory"></div>
+      </div>
+    </section>
+
+    <section class="screen tall" id="s3">
+      <div class="inner"><p class="eyebrow reveal">提交这篇续写</p><h2 class="reveal">先不看分数。<br>只看学生写了什么。</h2><div class="essay-shell reveal delay-1" id="essayShell"></div><p class="given-note reveal delay-2">蓝色部分由题目给出，不计入学生续写，也不参与语言评分。</p><p class="handoff reveal delay-3">现在，把这篇续写交给 <span class="blue">EssayFlow</span>。</p></div>
+    </section>
+
+    <section class="screen soft" id="s4">
+      <div class="inner lock-layout"><div class="reveal"><p class="eyebrow">第一步 · 只读原文</p><h2>01<br><span class="blue">原文既定事实</span></h2><p class="lead">此时，EssayFlow 看不到学生续写。它先把原文已经成立、后文不得改写的事实锁定下来。</p></div><div class="lock-box reveal delay-1"><span class="lock-label">LOCKED SOURCE</span><ul class="fact-list"><li>弟弟带来的狗叫 Toby</li><li>Toby 可能撞倒年幼的孩子</li><li>弟弟的妻子几个月前去世</li><li>弟弟正面临健康问题</li><li>Toby 是一直支撑他的陪伴</li></ul></div></div>
+    </section>
+
+    <section class="screen tall" id="s5">
+      <div class="inner"><p class="eyebrow reveal">第二步 · 确定故事方向</p><h2 class="reveal">02<br>原文线索与<span class="blue">认知终点</span></h2><p class="lead reveal delay-1">先确定原文说了什么，再判断学生有没有接住它。不能根据学生最后写成了什么，倒推原文原本想表达什么。</p><div class="direction-grid reveal delay-2" id="directionGrid"></div></div>
+    </section>
+
+    <section class="screen tall soft" id="s6">
+      <div class="inner"><p class="eyebrow reveal">第三步 · 核对学生续写</p><h2 class="reveal">大部分地方，<br>它都<span class="blue">接住了原文</span>。</h2><div class="evidence-good reveal delay-1"><ul class="action-list"><li>主动上门</li><li>停止为自己辩解</li><li>接纳 Toby</li><li>修复兄弟关系</li></ul><div class="quote-stack"><blockquote>“not to explain myself, but to bring Toby home”</blockquote><blockquote>“Neither of us used the word forgive. We did not need to.”</blockquote></div></div><div class="collision reveal"><div class="collision-card bad"><span>学生续写结尾</span><q>I had only just learned his name.</q></div><div class="collision-mark" aria-hidden="true">≠</div><div class="collision-card"><span>原文第一次提到这条狗</span><q>his dog Toby</q></div></div><p class="collision-explain reveal delay-2">原文第一次提到这条狗时，就已经给出了它的名字。因此，这不是一句表达是否优美的问题。<b>它改变了原文已经成立的事实。</b></p></div>
+    </section>
+
+    <section class="screen tall" id="s7">
+      <div class="inner"><p class="eyebrow reveal">四项内容判断</p><h2 class="reveal">它们共同决定<br>作文进入哪一档。</h2><div class="judgement-list" id="judgementList"></div><div class="principle reveal">四项不是各打几分后相加。任何一项出现关键硬伤，都会封住整篇作文的最高档位。</div></div>
+    </section>
+
+    <section class="screen soft" id="s8">
+      <div class="inner"><p class="eyebrow reveal">为什么不是第五档</p><div class="ceiling-list reveal"><div class="ceiling-row"><span>解决矛盾</span><span>站得住</span></div><div class="ceiling-row"><span>文本衔接</span><span>站得住</span></div><div class="ceiling-row"><span>主题方向</span><span>站得住</span></div><div class="ceiling-row"><span>情节合理性</span><span>关键冲突</span></div></div><div class="ceiling-stop reveal delay-1">第五档被封住。</div><p class="band reveal delay-2">内容档位：<b>第四档，16—20 分</b></p></div>
+    </section>
+
+    <section class="screen tall" id="s9">
+      <div class="inner language-layout"><div class="placement reveal"><p class="eyebrow">语言决定档内位置</p><div class="placement-big" id="languagePlacement"></div><p id="languageRationale"></p></div><div><h2 class="reveal">内容决定它在哪一档。<br><span class="blue">语言决定它落在哪里。</span></h2><article class="case reveal"><span class="case-tag">内容事实硬伤 · 决定档位上限</span><blockquote>I had only just learned his name.</blockquote><p>这不是语言问题，而是内容事实硬伤。它决定档位上限。</p><button class="rewrite-toggle" aria-expanded="false" data-rewrite="rewriteOne">查看修改</button><p class="rewrite" id="rewriteOne" hidden></p></article><article class="case reveal"><span class="case-tag">语流与标点节奏 · 只影响档内位置</span><blockquote>I said I was sorry, to him and then...</blockquote><p>这只是语流和标点节奏问题，只影响档内位置。</p><button class="rewrite-toggle" aria-expanded="false" data-rewrite="rewriteTwo">查看修改</button><p class="rewrite" id="rewriteTwo" hidden></p></article></div></div>
+    </section>
+
+    <section class="screen blue-screen score-screen" id="s10">
+      <div class="inner"><p class="eyebrow reveal">最终分数</p><div class="score-number reveal delay-1" id="scoreNumber" aria-hidden="true"></div><p class="score-meta reveal delay-2"><span id="scoreBand"></span> · <span id="scorePlacement"></span></p><p class="score-summary reveal delay-3" id="scoreSummary"></p></div>
+    </section>
+
+    <section class="screen tall" id="s11">
+      <div class="inner"><p class="eyebrow reveal">这不是一次“让模型打分”</p><h2 class="reveal">先锁定原文，<br>最后才形成评分。</h2><p class="lead reveal delay-1">EssayFlow 不是把原文和作文一起丢给模型，然后问“这篇多少分”。它先锁定原文，再核对续写，最后才形成评分。</p><div class="pipeline reveal delay-2"><article class="pipeline-step"><b>01 · 原文既定事实</b><p>锁定不得被续写改写的事实。</p><span class="pipeline-lock">看不到学生续写</span></article><article class="pipeline-step"><b>02 · 原文线索与认知终点</b><p>确定故事真正走向哪里。</p><span class="pipeline-lock">看不到学生续写</span></article><article class="pipeline-step"><b>03 · 学生续写事实核对</b><p>逐条检查续写是否接住原文。</p></article><article class="pipeline-step"><b>04 · 四项判档与语言定位</b><p>先确定内容档位，再确定档内位置。</p></article></div><p class="tech-note reveal delay-3">辅助验证：单次调用容易把这篇作文判到 24—25 分第五档；四阶段流程得到 19 分，与教研判断 17—18 分基本对齐。</p></div>
+    </section>
+
+    <section class="screen closing" id="s12">
+      <div class="inner"><p class="closing-question reveal">他们争的真的是一条狗吗？</p><h2 class="reveal delay-1">我们评的真的是<br><span class="blue">一篇作文吗？</span></h2><p class="lead reveal delay-2" style="margin-left:auto;margin-right:auto">我们评的是，它有没有真正读懂自己正在续写的那篇文章。</p><a class="cta reveal delay-3" href="essayflow-evaluate.html">测试我的续写 →</a></div>
+    </section>
+  </main>
+
+  <script src="vendor/lenis.min.js"></script>
+  <script src="content-data.js"></script>
+  <script>
+    const data = window.ESSAYFLOW_CONTENT;
+    const { exam, sample, goodReport } = data;
+
+    function renderData() {
+      const trajectory = goodReport.story.themeTrajectory;
+      document.getElementById('trajectory').innerHTML = [
+        ['01 · 初始认识', trajectory.initial],
+        ['02 · 开始换位思考', trajectory.development],
+        ['03 · 认知终点', trajectory.endpoint]
+      ].map(([label, text], index) => `<article class="trajectory-step${index === 0 ? ' active' : ''}"><span>${label}</span><p>${text}</p></article>`).join('');
+
+      document.getElementById('essayShell').innerHTML = `
+        <article class="essay-part"><div class="starter">${exam.starter1}</div><div class="student-text">${sample.p1}</div></article>
+        <article class="essay-part"><div class="starter">${exam.starter2}</div><div class="student-text">${sample.p2}</div></article>`;
+
+      document.getElementById('directionGrid').innerHTML = `
+        <article class="direction-item"><b>核心矛盾</b><p>${goodReport.story.conflict}</p></article>
+        <article class="direction-item"><b>关键伏笔</b><ul>${goodReport.story.foreshadowing.map((item) => `<li>${item}</li>`).join('')}</ul></article>
+        <article class="direction-item"><b>认知终点</b><p>${trajectory.endpoint}</p></article>`;
+
+      const summaries = {
+        conflict: '主人公停止辩解，主动上门，并让弟弟和 Toby 重新进入家庭关系。',
+        cohesion: '第一段决定上门，第二段从抵达门口开始，动作和信息都有原文来源。',
+        theme: '续写没有靠输赢或外部成功化解关系，而是落在理解、接纳与主动承担责任上。',
+        plausibility: '结尾称自己刚知道 Toby 的名字，与原文既定事实直接冲突。'
+      };
+      document.getElementById('judgementList').innerHTML = goodReport.contentJudgements.map((item, index) => `
+        <article class="judgement${item.status === '明显问题' ? ' problem' : ''}${index === 0 ? ' active' : ''}">
+          <div class="judgement-meta"><span>${item.status}</span><h3>${item.label}</h3></div><p>${summaries[item.key]}</p>
+        </article>`).join('');
+
+      document.getElementById('languagePlacement').innerHTML = goodReport.languagePlacement.replace('档内', '档内<br>');
+      document.getElementById('languageRationale').textContent = goodReport.languageRationale;
+      document.getElementById('rewriteOne').textContent = `改写：${goodReport.issues[0].rewrite}`;
+      document.getElementById('rewriteTwo').textContent = `改写：${goodReport.issues[1].rewrite}`;
+      document.getElementById('scoreNumber').textContent = goodReport.total;
+      document.getElementById('scoreBand').textContent = `${goodReport.level} · ${goodReport.bandRange}`;
+      document.getElementById('scorePlacement').textContent = goodReport.languagePlacement;
+      document.getElementById('scoreSummary').textContent = goodReport.summary;
+    }
+
+    renderData();
+    const lenis = new Lenis({ autoRaf: true, anchors: true, duration: 1.05, smoothWheel: true });
+    const screens = [...document.querySelectorAll('.screen')];
+    const revealObserver = new IntersectionObserver((entries) => entries.forEach((entry) => {
+      if (entry.isIntersecting) entry.target.classList.add('is-visible');
+    }), { threshold: .16 });
+    screens.forEach((screen) => revealObserver.observe(screen));
+
+    const itemObserver = new IntersectionObserver((entries) => entries.forEach((entry) => {
+      if (!entry.isIntersecting) return;
+      const group = entry.target.parentElement;
+      [...group.children].forEach((item) => item.classList.toggle('active', item === entry.target));
+    }), { threshold: .62 });
+    document.querySelectorAll('.trajectory-step, .judgement').forEach((item) => itemObserver.observe(item));
+
+    const choices = [...document.querySelectorAll('.choice')];
+    const answer = document.getElementById('conflictAnswer');
+    const continueHint = document.getElementById('conflictContinue');
+    choices.forEach((choice) => choice.addEventListener('click', () => {
+      choices.forEach((item) => item.setAttribute('aria-pressed', String(item === choice)));
+      answer.textContent = choice.dataset.feedback;
+      answer.hidden = false;
+      continueHint.hidden = false;
+    }));
+
+    document.querySelectorAll('.rewrite-toggle').forEach((button) => button.addEventListener('click', () => {
+      const target = document.getElementById(button.dataset.rewrite);
+      const open = button.getAttribute('aria-expanded') === 'true';
+      button.setAttribute('aria-expanded', String(!open));
+      button.textContent = open ? '查看修改' : '收起修改';
+      target.hidden = open;
+    }));
+
+    function updateProgress() {
+      const total = document.documentElement.scrollHeight - innerHeight;
+      document.getElementById('progressBar').style.width = `${total > 0 ? Math.min(100, scrollY / total * 100) : 0}%`;
+    }
+    addEventListener('scroll', updateProgress, { passive: true });
+    updateProgress();
+  </script>
+</body>
+</html>

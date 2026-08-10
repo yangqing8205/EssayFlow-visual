@@ -1,0 +1,2114 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>EssayFlow</title>
+  <link rel="stylesheet" href="vendor/lenis.css">
+  <style>
+    :root {
+      --ink: #111111;
+      --gray: #a9aaaf;
+      --gray-dark: #55565b;
+      --gray-light: #e4e4e5;
+      --blue: #1847ff;
+      --blue-pale: #dce2ff;
+      --line: #dedfe3;
+      --serif: "Iowan Old Style", "Palatino Linotype", Baskerville, Georgia, serif;
+      --sans: "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+    }
+
+    * { box-sizing: border-box; }
+
+    html {
+      scroll-behavior: smooth;
+      scroll-snap-type: y proximity;
+      background: #fff;
+    }
+
+    body {
+      margin: 0;
+      color: var(--ink);
+      background: #fff;
+      font-family: var(--sans);
+      overflow-x: hidden;
+    }
+
+    .progress {
+      position: fixed;
+      inset: 0 0 auto;
+      height: 1px;
+      z-index: 100;
+      pointer-events: none;
+    }
+
+    .progress span {
+      display: block;
+      width: 0;
+      height: 100%;
+      background: var(--blue);
+      transition: width 80ms linear;
+    }
+
+    .screen {
+      position: relative;
+      width: 100%;
+      min-height: 100svh;
+      height: 100svh;
+      overflow: hidden;
+      scroll-snap-align: start;
+      scroll-snap-stop: always;
+      background: #fff;
+    }
+
+    .reveal {
+      opacity: 0;
+      transform: translateY(28px);
+      transition: opacity .8s cubic-bezier(.2,.75,.2,1), transform .8s cubic-bezier(.2,.75,.2,1);
+    }
+
+    .screen.is-visible .reveal {
+      opacity: 1;
+      transform: translateY(0);
+    }
+
+    .screen.is-visible .delay-1 { transition-delay: 90ms; }
+    .screen.is-visible .delay-2 { transition-delay: 180ms; }
+    .screen.is-visible .delay-3 { transition-delay: 270ms; }
+
+    .down {
+      position: absolute;
+      left: 50%;
+      bottom: 18px;
+      z-index: 3;
+      border: 0;
+      padding: 8px 18px;
+      color: #111;
+      background: transparent;
+      font: 42px/1 var(--serif);
+      transform: translateX(-50%);
+      cursor: pointer;
+      animation: breathe 1.8s ease-in-out infinite;
+    }
+
+    @keyframes breathe {
+      0%, 100% { transform: translate(-50%, 0); }
+      50% { transform: translate(-50%, 7px); }
+    }
+
+    .float-word {
+      display: inline-block;
+      transform-origin: 50% 72%;
+      transition: transform .24s cubic-bezier(.2,.8,.2,1), color .24s ease, text-shadow .24s ease;
+      cursor: default;
+    }
+
+    .float-word:hover,
+    .float-word:focus-visible {
+      outline: none;
+      transform: translateY(-3px) scale(1.055);
+      text-shadow: 0 14px 25px rgb(24 71 255 / 14%);
+    }
+
+    /* Page 1 */
+    .cover-header {
+      position: absolute;
+      top: 31px;
+      left: 3.5%;
+      right: 3.5%;
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      z-index: 5;
+      font-size: 17px;
+      font-weight: 700;
+    }
+
+    .cover-header a {
+      color: inherit;
+      text-decoration: none;
+      border-bottom: 1px solid currentColor;
+      padding-bottom: 4px;
+    }
+
+    .quote-layout {
+      position: absolute;
+      top: 9.5%;
+      left: 6.5%;
+      right: 6.5%;
+      bottom: 7%;
+      display: flex;
+      flex-direction: column;
+      justify-content: flex-start;
+    }
+
+    .quote-block {
+      font-family: var(--serif);
+      font-size: clamp(72px, 6vw, 124px);
+      font-weight: 500;
+      line-height: .82;
+      letter-spacing: -.055em;
+      white-space: nowrap;
+    }
+
+    .quote-block + .quote-block { margin-top: 38px; }
+
+    .quote-line { display: block; }
+    .muted { color: var(--gray); }
+    .blue { color: var(--blue); }
+
+    .quote-tail {
+      display: inline-block;
+      margin-left: .14em;
+      font-size: .43em;
+      letter-spacing: -.035em;
+      vertical-align: .12em;
+    }
+
+    .quote-cn {
+      margin: 19px 0 0;
+      font-size: clamp(17px, 1.25vw, 25px);
+      line-height: 1.35;
+      letter-spacing: -.02em;
+    }
+
+    .prompt-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 7vw;
+      width: 100%;
+      margin-top: 40px;
+      font-family: var(--serif);
+      font-size: clamp(26px, 2.2vw, 46px);
+      line-height: 1.08;
+      letter-spacing: -.035em;
+    }
+
+    .prompt-cn {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 7vw;
+      margin-top: 17px;
+      color: #4b4c51;
+      font-size: clamp(15px, 1vw, 21px);
+    }
+
+    .credit {
+      position: absolute;
+      right: 6.5%;
+      bottom: 7.3%;
+      font-size: clamp(12px, .9vw, 18px);
+    }
+
+    /* One sticky concept page whose emphasis changes while scrolling. */
+    .concept-stage {
+      position: relative;
+      height: 190svh;
+      scroll-snap-align: start;
+    }
+
+    .concept {
+      position: sticky;
+      top: 0;
+      display: grid;
+      place-items: center;
+      text-align: center;
+    }
+
+    .concept-inner {
+      width: min(900px, 80vw);
+      transform: translateY(-1.5vh);
+    }
+
+    .concept-kicker {
+      margin: 0 0 68px;
+      color: #8c8c8c;
+      font-size: clamp(13px, .9vw, 18px);
+      letter-spacing: .11em;
+    }
+
+    .concept-word {
+      margin: 0;
+      font-family: var(--serif);
+      font-size: clamp(100px, 10vw, 202px);
+      font-weight: 500;
+      line-height: .82;
+      letter-spacing: -.07em;
+    }
+
+    .concept-word + .concept-word { margin-top: 105px; }
+    .concept .then { color: #606064; }
+    .concept .why { color: #d9dfff; }
+
+    .strike {
+      position: relative;
+      display: inline-block;
+    }
+
+    .strike::after {
+      content: "";
+      position: absolute;
+      left: 0;
+      right: 0;
+      top: 51%;
+      height: 1px;
+      background: #77787b;
+      transform: scaleX(var(--concept-progress, 0));
+      transform-origin: left;
+      transition: transform 40ms linear;
+    }
+
+    .concept-copy {
+      margin: 72px auto 0;
+      color: #c1c1c3;
+      font-size: clamp(16px, 1.15vw, 24px);
+      line-height: 1.75;
+    }
+
+    /* Page 4 */
+    .chapter-title {
+      display: flex;
+      align-items: center;
+      padding: 0 8%;
+    }
+
+    .chapter-title h2 {
+      margin: -2vh 0 0;
+      font-family: var(--serif);
+      font-size: clamp(88px, 9vw, 184px);
+      font-weight: 500;
+      line-height: .92;
+      letter-spacing: -.06em;
+    }
+
+    .chapter-title .line-2 {
+      display: block;
+      color: var(--blue);
+      white-space: nowrap;
+    }
+
+    /* Pudding-style sticky graphic with the original text as scroll steps. */
+    .story-scrolly {
+      position: relative;
+      display: grid;
+      grid-template-columns: 52% 48%;
+      background: #fff;
+      scroll-snap-align: start;
+    }
+
+    .story-graphic {
+      position: sticky;
+      top: 0;
+      height: 100svh;
+      overflow: hidden;
+      background: #fff;
+      border-right: 1px solid #edf0f8;
+    }
+
+    .story-image {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+      padding: 4vh 2vw;
+      opacity: 0;
+      transform: scale(1.045);
+      transition: opacity .75s cubic-bezier(.2,.7,.2,1), transform 1.3s cubic-bezier(.2,.7,.2,1);
+      will-change: opacity, transform;
+    }
+
+    .story-image.active {
+      opacity: 1;
+      transform: scale(1);
+    }
+
+    .story-graphic::after {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(90deg, transparent 82%, rgb(255 255 255 / 42%));
+      pointer-events: none;
+    }
+
+    .story-counter {
+      position: absolute;
+      left: 4vw;
+      bottom: 4vh;
+      z-index: 3;
+      color: var(--blue);
+      font-family: Georgia, "Times New Roman", serif;
+      font-size: clamp(54px, 6vw, 118px);
+      line-height: .8;
+      letter-spacing: -.06em;
+      text-shadow: none;
+    }
+
+    .story-counter small {
+      margin-left: 8px;
+      font: 600 13px/1 var(--sans);
+      letter-spacing: .12em;
+      vertical-align: .4em;
+    }
+
+    .story-steps {
+      padding: 18vh 6.5vw 24vh 5vw;
+    }
+
+    .story-step {
+      min-height: 96svh;
+      display: flex;
+      align-items: center;
+      position: relative;
+      opacity: .14;
+      transform: translateY(14px);
+      transition: opacity .55s ease, transform .65s cubic-bezier(.2,.7,.2,1);
+    }
+
+    .story-step.active { opacity: 1; transform: translateY(0); }
+
+    .story-step p {
+      margin: 0;
+      color: #3e3f45;
+      font-family: Georgia, "Times New Roman", serif;
+      font-size: clamp(21px, 1.38vw, 29px);
+      line-height: 1.58;
+      letter-spacing: -.018em;
+    }
+
+    .story-step strong {
+      color: var(--blue);
+      font-weight: 700;
+      box-shadow: none;
+    }
+
+    .story-step-index {
+      position: absolute;
+      top: calc(50% - 3.8em);
+      left: -2.8vw;
+      color: #c3c5cc;
+      font: 700 14px/1 Georgia, "Times New Roman", serif;
+      letter-spacing: .08em;
+    }
+
+    .scene-effect {
+      position: absolute;
+      inset: 0;
+      z-index: 2;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity .6s ease;
+      overflow: hidden;
+    }
+
+    .scene-effect.active { opacity: 1; }
+
+    .effect-run span {
+      position: absolute;
+      left: 7%;
+      bottom: 11%;
+      width: 15%;
+      height: 2px;
+      background: linear-gradient(90deg, transparent, rgb(24 71 255 / 64%), transparent);
+      animation: runTrace 2.8s ease-in-out infinite;
+    }
+
+    .effect-run span:nth-child(2) { bottom: 14%; animation-delay: -.8s; opacity: .55; }
+    .effect-run span:nth-child(3) { bottom: 17%; animation-delay: -1.6s; opacity: .32; }
+
+    @keyframes runTrace {
+      0% { transform: translateX(-40%) scaleX(.45); opacity: 0; }
+      35% { opacity: 1; }
+      100% { transform: translateX(430%) scaleX(1.15); opacity: 0; }
+    }
+
+    .effect-distance span {
+      position: absolute;
+      left: 50%;
+      top: 25%;
+      width: 1px;
+      height: 52%;
+      background: linear-gradient(180deg, transparent, var(--blue) 25%, var(--blue) 75%, transparent);
+      transform: scaleY(var(--distance-scale, .2));
+      opacity: .55;
+    }
+
+    .effect-companion span {
+      position: absolute;
+      left: 15%;
+      top: 31%;
+      width: 48%;
+      aspect-ratio: 1.35;
+      border: 1px solid rgb(24 71 255 / 34%);
+      border-radius: 50%;
+      animation: companionPulse 3.6s ease-in-out infinite;
+    }
+
+    @keyframes companionPulse {
+      0%, 100% { transform: scale(.96); opacity: .24; }
+      50% { transform: scale(1.04); opacity: .62; }
+    }
+
+    .prompt-page {
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      padding: 8vh 12vw;
+    }
+
+    .exam-note {
+      margin: 0 0 8vh;
+      color: #777981;
+      font-size: clamp(15px, 1vw, 20px);
+      line-height: 1.9;
+    }
+
+    .prompt-line {
+      margin: 0;
+      padding: 3.5vh 0;
+      border-top: 1px solid var(--line);
+      color: #777981;
+      font-family: Georgia, "Times New Roman", serif;
+      font-size: clamp(30px, 2.7vw, 52px);
+      line-height: 1.28;
+      letter-spacing: -.03em;
+    }
+
+    .prompt-line:last-of-type {
+      color: var(--blue);
+      border-bottom: 1px solid var(--line);
+    }
+
+    .judgement-page {
+      display: flex;
+      align-items: center;
+      padding: 8vh 0;
+    }
+
+    .judgement-inner {
+      width: min(1050px, 72vw);
+      margin: 0 auto;
+    }
+
+    .judgement-label {
+      margin: 0 0 22px;
+      color: var(--blue);
+      font-size: 13px;
+      font-weight: 700;
+      letter-spacing: .08em;
+    }
+
+    .judgement-title {
+      margin: 0 0 34px;
+      font-family: var(--serif);
+      font-size: clamp(34px, 3.1vw, 56px);
+      font-weight: 500;
+      line-height: 1.16;
+      letter-spacing: -.035em;
+    }
+
+    .judgement-options {
+      border-top: 1px solid var(--line);
+    }
+
+    .judgement-option {
+      display: grid;
+      grid-template-columns: 38px 1fr;
+      gap: 18px;
+      align-items: center;
+      width: 100%;
+      min-height: 82px;
+      padding: 14px 6px;
+      border: 0;
+      border-bottom: 1px solid var(--line);
+      color: var(--ink);
+      background: transparent;
+      text-align: left;
+      font-size: clamp(16px, 1.05vw, 20px);
+      cursor: pointer;
+      transition: color .22s ease, padding-left .22s ease;
+    }
+
+    .judgement-option:hover,
+    .judgement-option:focus-visible {
+      color: var(--blue);
+      padding-left: 12px;
+      outline: none;
+    }
+
+    .judgement-option:focus-visible .option-letter {
+      box-shadow: 0 0 0 3px rgb(24 71 255 / 14%);
+    }
+
+    .judgement-option[aria-pressed="true"] { color: var(--blue); }
+
+    .option-letter {
+      display: grid;
+      place-items: center;
+      width: 34px;
+      height: 34px;
+      border: 1px solid #c7c9d0;
+      border-radius: 50%;
+      color: var(--ink);
+      font: 16px/1 var(--serif);
+      transition: border-color .22s ease, color .22s ease;
+    }
+
+    .judgement-option[aria-pressed="true"] .option-letter {
+      border-color: var(--blue);
+      color: var(--blue);
+    }
+
+    .judgement-feedback {
+      max-width: 760px;
+      margin: 30px 0 0;
+      padding: 2px 0 2px 20px;
+      border-left: 2px solid var(--blue);
+      color: var(--gray-dark);
+      font-size: clamp(15px, 1vw, 19px);
+      line-height: 1.7;
+    }
+
+    .judgement-feedback[hidden] { display: none; }
+
+    .judgement-actions {
+      display: flex;
+      align-items: center;
+      gap: 24px;
+      margin-top: 22px;
+    }
+
+    .judgement-actions[hidden],
+    .judgement-conclusion[hidden] { display: none; }
+
+    .judgement-action {
+      border: 0;
+      padding: 7px 0;
+      color: var(--gray-dark);
+      background: transparent;
+      border-bottom: 1px solid currentColor;
+      font-size: 14px;
+      font-weight: 700;
+      cursor: pointer;
+    }
+
+    .judgement-action.primary { color: var(--blue); }
+
+    .judgement-action:hover,
+    .judgement-action:focus-visible {
+      color: var(--blue);
+      outline: none;
+    }
+
+    .judgement-conclusion {
+      margin-top: 34px;
+      padding-top: 26px;
+      border-top: 1px solid var(--line);
+      font-family: var(--serif);
+      font-size: clamp(23px, 1.8vw, 34px);
+      line-height: 1.45;
+      letter-spacing: -.025em;
+    }
+
+    .judgement-conclusion span { color: var(--blue); }
+
+    .analysis-module { position: relative; }
+
+    .analysis-page {
+      height: auto;
+      min-height: 100svh;
+      padding: 10vh 0;
+      overflow: visible;
+      scroll-snap-align: none;
+    }
+
+    .analysis-inner {
+      width: min(1080px, 76vw);
+      margin: 0 auto;
+    }
+
+    .analysis-kicker {
+      margin: 0 0 18px;
+      color: var(--blue);
+      font-size: 13px;
+      font-weight: 700;
+      letter-spacing: .08em;
+    }
+
+    .analysis-question {
+      max-width: 940px;
+      margin: 0;
+      font-family: var(--serif);
+      font-size: clamp(35px, 3.4vw, 62px);
+      font-weight: 500;
+      line-height: 1.12;
+      letter-spacing: -.04em;
+    }
+
+    .analysis-helper,
+    .role-note {
+      margin: 16px 0 0;
+      color: var(--gray-dark);
+      font-size: 14px;
+      line-height: 1.65;
+    }
+
+    .role-note { color: var(--blue); }
+
+    .analysis-options {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      margin-top: 42px;
+      border-top: 1px solid var(--line);
+    }
+
+    .analysis-option {
+      display: grid;
+      grid-template-columns: 34px 1fr;
+      gap: 15px;
+      align-items: center;
+      min-height: 88px;
+      padding: 15px 18px 15px 4px;
+      border: 0;
+      border-right: 1px solid var(--line);
+      border-bottom: 1px solid var(--line);
+      color: var(--ink);
+      background: transparent;
+      text-align: left;
+      line-height: 1.55;
+      cursor: pointer;
+      transition: color 200ms ease, background 200ms ease, opacity 200ms ease;
+    }
+
+    .analysis-option:nth-child(even) { border-right: 0; padding-left: 18px; }
+    .analysis-option:hover,
+    .analysis-option:focus-visible { color: var(--blue); background: rgb(220 226 255 / 26%); outline: none; }
+    .analysis-option:focus-visible .option-letter { box-shadow: 0 0 0 3px rgb(24 71 255 / 14%); }
+    .analysis-option[aria-pressed="true"] { color: var(--blue); background: rgb(220 226 255 / 42%); }
+    .analysis-options.confirmed .analysis-option:not([aria-pressed="true"]) { opacity: .5; }
+
+    .analysis-controls {
+      display: flex;
+      align-items: center;
+      gap: 24px;
+      min-height: 52px;
+      margin-top: 19px;
+    }
+
+    .analysis-control {
+      border: 0;
+      padding: 8px 0;
+      color: var(--gray-dark);
+      background: transparent;
+      border-bottom: 1px solid currentColor;
+      font-size: 14px;
+      font-weight: 700;
+      cursor: pointer;
+    }
+
+    .analysis-control.primary { color: var(--blue); }
+    .analysis-control:disabled { opacity: .28; cursor: default; }
+    .analysis-control:focus-visible { outline: 3px solid rgb(24 71 255 / 13%); }
+    .selection-limit { color: var(--gray); font-size: 12px; }
+
+    .analysis-result {
+      margin-top: 36px;
+      padding-top: 30px;
+      border-top: 1px solid var(--line);
+      opacity: 0;
+      transform: translateY(8px);
+      transition: opacity 360ms ease, transform 360ms ease;
+    }
+
+    .analysis-result.visible { opacity: 1; transform: translateY(0); }
+    .analysis-result[hidden] { display: none; }
+    .result-section-label {
+      margin: 0 0 14px;
+      color: var(--blue);
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: .08em;
+    }
+    .selected-notes { margin-bottom: 34px; }
+    .selected-notes p { margin: 0 0 8px; color: var(--gray-dark); line-height: 1.65; }
+    .complete-judgement { margin-top: 0; }
+
+    .analysis-stage[hidden] { display: none; }
+    .analysis-stage {
+      margin-top: 46px;
+      padding-top: 38px;
+      border-top: 1px solid var(--line);
+    }
+    .stage-question {
+      max-width: 860px;
+      margin: 0;
+      font: 500 clamp(28px, 2.5vw, 45px)/1.2 var(--serif);
+      letter-spacing: -.035em;
+    }
+
+    .starter-evidence {
+      margin-bottom: 42px;
+      padding: 20px 0 20px 22px;
+      border-left: 2px solid var(--blue);
+    }
+    .starter-evidence small {
+      display: block;
+      margin-bottom: 10px;
+      color: var(--blue);
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: .08em;
+    }
+    .starter-evidence blockquote {
+      margin: 0;
+      color: var(--gray-dark);
+      font: clamp(25px, 2.2vw, 40px)/1.4 var(--serif);
+    }
+    .starter-evidence p { margin: 18px 0 0; color: var(--ink); font-size: 16px; }
+
+    .prerequisite-lab {
+      margin-top: 38px;
+      padding-top: 34px;
+      border-top: 1px solid var(--line);
+    }
+    .prerequisite-lab h3 {
+      max-width: 820px;
+      margin: 0;
+      font: 500 clamp(25px, 2vw, 38px)/1.3 var(--serif);
+      letter-spacing: -.025em;
+    }
+    .prerequisite-lab > p { margin: 12px 0 24px; color: var(--gray-dark); line-height: 1.65; }
+    .prerequisite-pool { display: flex; flex-wrap: wrap; gap: 9px; }
+    .prerequisite-button {
+      border: 1px solid var(--line);
+      padding: 10px 13px;
+      color: var(--ink);
+      background: #fff;
+      text-align: left;
+      line-height: 1.5;
+      cursor: pointer;
+      transition: color 180ms ease, border-color 180ms ease, opacity 180ms ease;
+    }
+    .prerequisite-button:hover,
+    .prerequisite-button:focus-visible { color: var(--blue); border-color: var(--blue); outline: none; }
+    .prerequisite-button[aria-pressed="true"] { opacity: .28; cursor: default; }
+    .prerequisite-groups {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1px;
+      margin-top: 20px;
+      border: 1px solid var(--line);
+      background: var(--line);
+    }
+    .prerequisite-group { min-height: 170px; padding: 20px; background: #fff; }
+    .prerequisite-group h4 { margin: 0 0 14px; color: var(--blue); font-size: 12px; letter-spacing: .08em; }
+    .prerequisite-group span { display: block; padding: 9px 0; border-top: 1px solid var(--line); line-height: 1.5; }
+    .prerequisite-complete { margin: 20px 0 0; color: var(--blue); line-height: 1.65; }
+    .prerequisite-complete[hidden] { display: none; }
+
+    .classification {
+      display: grid;
+      gap: 1px;
+      background: var(--line);
+      border: 1px solid var(--line);
+    }
+
+    .classification-item {
+      padding: 22px 24px;
+      background: #fff;
+      transition: opacity 480ms ease, transform 480ms ease;
+    }
+
+    .classification-item small {
+      display: block;
+      margin-bottom: 8px;
+      color: var(--blue);
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: .08em;
+    }
+
+    .classification-item p { margin: 0; line-height: 1.65; }
+
+    .method-line {
+      margin: 30px 0 0;
+      font-family: var(--serif);
+      font-size: clamp(24px, 1.9vw, 36px);
+      line-height: 1.45;
+      letter-spacing: -.025em;
+    }
+
+    .method-line strong { color: var(--blue); font-weight: 500; }
+
+    .timeline-classification { grid-template-columns: 1fr 220px; }
+    .timeline-track { grid-row: span 2; display: grid; grid-template-columns: repeat(4, 1fr); gap: 0; align-items: center; }
+    .timeline-node { position: relative; padding: 25px 18px; background: #fff; text-align: center; line-height: 1.5; }
+    .timeline-node:not(:last-child)::after { content: ""; position: absolute; top: 50%; right: -10%; width: 20%; height: 1px; background: var(--blue); transform: scaleX(0); transform-origin: left; animation: lineGrow 520ms ease forwards; }
+    .timeline-node b { display: block; margin-bottom: 7px; color: var(--blue); font-size: 12px; }
+    @keyframes lineGrow { to { transform: scaleX(1); } }
+    .rain-mark { position: absolute; width: 55px; height: 35px; opacity: .2; background: repeating-linear-gradient(108deg, transparent 0 12px, var(--blue) 13px, var(--blue) 14px, transparent 15px 25px); }
+
+    .mind-classification .classification-item:nth-child(2) { transform: translateX(14px); }
+    .mind-classification .classification-item:nth-child(3) { transform: translateX(28px); }
+    .constraint-classification .classification-item:nth-child(-n+2) { opacity: .55; }
+
+    .apology-formula {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 30px;
+      background: transparent;
+      border: 0;
+    }
+
+    .apology-formula .classification-item {
+      position: relative;
+      border: 1px solid var(--line);
+      text-align: center;
+      font: clamp(25px, 2vw, 38px)/1.2 var(--serif);
+    }
+
+    .apology-formula .classification-item:not(:last-child)::after { content: ""; position: absolute; left: 100%; top: 50%; width: 31px; height: 1px; background: var(--blue); transform-origin: left; animation: lineGrow 520ms ease forwards; }
+    .formula-result { margin: 20px 0 0; color: var(--blue); text-align: center; font-weight: 700; }
+
+    .theme-tags { display: flex; justify-content: center; gap: 18px; margin-bottom: 28px; color: var(--gray); }
+    .theme-tags span { padding: 8px 12px; border: 1px solid var(--line); opacity: .48; }
+    .theme-axis { display: grid; grid-template-columns: 1fr 100px 1fr; align-items: center; max-width: 720px; margin: 0 auto; }
+    .theme-axis strong { font: clamp(35px, 3vw, 58px)/1 var(--serif); text-align: center; }
+    .theme-axis strong:last-child { color: var(--blue); }
+    .theme-axis span { height: 1px; background: var(--blue); transform: scaleX(0); animation: lineGrow 800ms ease forwards; }
+
+    .module-next { position: relative; display: block; width: max-content; margin: 34px auto 0; border: 0; padding: 8px 18px; color: var(--blue); background: transparent; font: 32px/1 var(--serif); cursor: pointer; }
+    .module-next[hidden] { display: none; }
+
+    .analysis-summary { text-align: center; }
+    .summary-list { width: min(700px, 100%); margin: 6vh auto; padding: 0; list-style: none; border-top: 1px solid var(--line); }
+    .summary-list li { padding: 17px 0; border-bottom: 1px solid var(--line); color: var(--gray-dark); }
+    .summary-pause { margin: 7vh 0; font-family: var(--serif); font-size: clamp(34px, 3.5vw, 64px); line-height: 1.25; }
+    .summary-pause strong { color: var(--blue); font-weight: 500; }
+
+    /* Interactive essay module */
+    .essay-page { --essay-accent: var(--blue); padding: 9vh 0 11vh; }
+    .essay-page .analysis-inner { width: min(1180px, 82vw); }
+    .essay-head { max-width: 1000px; }
+    .essay-number { display: inline-block; min-width: 48px; margin-right: 14px; color: var(--blue); font: 500 13px/1 var(--sans); letter-spacing: .12em; }
+    .essay-recognition { color: var(--blue); font-size: 12px; font-weight: 700; letter-spacing: .08em; }
+    .essay-starter {
+      margin: 32px 0 38px;
+      padding: 18px 0 18px 22px;
+      border-left: 2px solid var(--blue);
+      color: var(--gray-dark);
+      font: clamp(27px, 2.7vw, 48px)/1.35 var(--serif);
+      letter-spacing: -.025em;
+    }
+    .essay-starter strong { color: var(--blue); font-weight: 500; }
+    .essay-question { max-width: 1020px; margin: 0; font: 500 clamp(38px, 4vw, 70px)/1.08 var(--serif); letter-spacing: -.045em; }
+    .essay-subtitle { max-width: 760px; margin: 16px 0 0; color: var(--gray-dark); line-height: 1.7; }
+    .essay-canvas { position: relative; min-height: 360px; margin-top: 46px; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); overflow: hidden; }
+    .essay-choices { display: grid; grid-template-columns: 1fr; width: min(940px,100%); margin-top: 34px; border-top: 1px solid var(--line); }
+    .essay-choice {
+      display: grid;
+      grid-template-columns: 38px 1fr;
+      gap: 14px;
+      align-items: center;
+      min-height: 82px;
+      padding: 15px 20px 15px 4px;
+      border: 0;
+      border-bottom: 1px solid var(--line);
+      color: var(--ink);
+      background: #fff;
+      text-align: left;
+      font: 15px/1.55 var(--sans);
+      cursor: pointer;
+      transition: color 200ms ease, background 200ms ease, opacity 200ms ease;
+    }
+    .essay-choice:nth-child(even) { padding-left: 4px; }
+    .essay-choice:hover, .essay-choice:focus-visible { color: var(--blue); background: rgb(220 226 255 / 24%); outline: none; }
+    .essay-choice:focus-visible { box-shadow: inset 0 0 0 2px rgb(24 71 255 / 26%); }
+    .essay-choice[aria-pressed="true"] { color: var(--blue); background: rgb(220 226 255 / 44%); }
+    .essay-page.is-resolved .essay-choice:not([aria-pressed="true"]) { opacity: .48; }
+    .choice-letter { display: grid; place-items: center; width: 34px; height: 34px; border: 1px solid #cfd1d9; border-radius: 50%; font: 16px/1 var(--serif); }
+    .essay-controls { display: flex; align-items: center; gap: 24px; min-height: 54px; margin-top: 18px; }
+    .essay-control { border: 0; padding: 8px 0; color: var(--gray-dark); background: transparent; border-bottom: 1px solid currentColor; font-size: 13px; font-weight: 700; cursor: pointer; }
+    .essay-control.primary { color: var(--blue); }
+    .essay-control:disabled { opacity: .26; cursor: default; }
+    .essay-status { color: var(--gray); font-size: 12px; }
+    .essay-result { margin-top: 36px; padding-top: 30px; border-top: 1px solid var(--line); opacity: 0; transform: translateY(10px); transition: opacity 420ms ease, transform 420ms ease; }
+    .essay-result[hidden] { display: none; }
+    .essay-result.visible { opacity: 1; transform: none; }
+    .essay-user-response { margin-bottom: 32px; color: var(--gray-dark); line-height: 1.7; }
+    .essay-user-response p { margin: 0 0 8px; }
+    .essay-judgement { padding-top: 26px; border-top: 1px solid var(--line); }
+    .essay-method { margin: 30px 0 0; font: clamp(24px, 2vw, 38px)/1.45 var(--serif); letter-spacing: -.025em; }
+    .essay-method strong { color: var(--blue); font-weight: 500; }
+
+    /* 01: relationship formation */
+    .relation-stage { min-height: 390px; }
+    .relation-node { position: absolute; top: 47%; display: grid; place-items: center; width: 106px; height: 106px; border: 1px solid var(--line); border-radius: 50%; background: #fff; font: 500 23px/1 var(--serif); transform: translateY(-50%); z-index: 3; transition: left 900ms cubic-bezier(.2,.75,.2,1), right 900ms cubic-bezier(.2,.75,.2,1), opacity 600ms ease, transform 900ms cubic-bezier(.2,.75,.2,1); }
+    .relation-node.narrator { left: 15%; }
+    .relation-node.brother { left: 50%; color: var(--blue); border-color: var(--blue); opacity: 0; transform: translate(-50%,-50%) scale(.3); }
+    .relation-node.toby { right: 15%; color: var(--blue); }
+    .relation-link { position: absolute; top: 47%; height: 1px; background: var(--blue); transform: scaleX(0); transition: transform 700ms ease 260ms; z-index: 2; }
+    .relation-link.left { left: 25%; width: 25%; transform-origin: right; }
+    .relation-link.right { left: 50%; width: 25%; transform-origin: left; }
+    .cognition-shift { position: absolute; left: 50%; bottom: 42px; display: flex; align-items: center; gap: 18px; transform: translateX(-50%); font: clamp(24px, 2.2vw, 40px)/1 var(--serif); }
+    .cognition-shift span:first-child { color: var(--gray); }
+    .cognition-arrow, .cognition-shift strong { opacity: 0; transform: translateX(-8px); transition: opacity 500ms ease 620ms, transform 500ms ease 620ms; }
+    .cognition-shift strong { color: var(--blue); font-weight: 500; }
+    .essay-page.is-resolved .relation-node.narrator { left: 20%; }
+    .essay-page.is-resolved .relation-node.toby { right: 20%; }
+    .essay-page.is-resolved .relation-node.brother { opacity: 1; transform: translate(-50%,-50%) scale(1); }
+    .essay-page.is-resolved .relation-link { transform: scaleX(1); }
+    .essay-page.is-resolved .cognition-arrow, .essay-page.is-resolved .cognition-shift strong { opacity: 1; transform: none; }
+
+    /* 02: biscuit bridge */
+    .biscuit-bridge { min-height: 390px; }
+    .bridge-node { position: absolute; top: 46%; display: grid; place-items: center; width: 112px; height: 112px; border: 1px solid var(--line); border-radius: 50%; background: #fff; transform: translateY(-50%); font: 22px/1 var(--serif); z-index: 3; }
+    .bridge-node.gift { left: 13%; color: var(--blue); }
+    .bridge-node.brother { right: 13%; }
+    .biscuit-icon { position: relative; width: 54px; height: 54px; border: 2px solid var(--blue); border-radius: 50%; }
+    .biscuit-icon i { position: absolute; width: 5px; height: 5px; border-radius: 50%; background: var(--blue); }
+    .biscuit-icon i:nth-child(1) { left: 14px; top: 14px; }.biscuit-icon i:nth-child(2) { right: 12px; top: 19px; }.biscuit-icon i:nth-child(3) { left: 24px; bottom: 10px; }
+    .bridge-line { position: absolute; left: 24%; right: 24%; top: 46%; height: 1px; background: linear-gradient(90deg,var(--blue) 0 40%,transparent 40% 60%,var(--blue) 60%); transform: scaleX(.85); opacity: .34; transition: opacity 500ms ease, transform 700ms ease; }
+    .bridge-question { position: absolute; left: 50%; top: 46%; transform: translate(-50%,-50%); color: var(--gray); font: 56px/1 var(--serif); transition: opacity 350ms ease, transform 350ms ease; }
+    .bridge-understanding { position: absolute; left: 50%; top: 46%; display: grid; place-items: center; width: 116px; height: 116px; border: 1px solid var(--blue); border-radius: 50%; color: var(--blue); background: #fff; font: 24px/1 var(--serif); opacity: 0; transform: translate(-50%,-50%) scale(.25); transition: opacity 500ms ease 180ms, transform 700ms cubic-bezier(.2,.75,.2,1) 180ms; z-index: 4; }
+    .repair-caption { position: absolute; left: 50%; bottom: 40px; transform: translateX(-50%); color: var(--blue); font: 25px/1 var(--serif); opacity: 0; transition: opacity 500ms ease 700ms; }
+    .essay-page.is-resolved .bridge-question { opacity: 0; transform: translate(-50%,-50%) scale(.5); }
+    .essay-page.is-resolved .bridge-understanding { opacity: 1; transform: translate(-50%,-50%) scale(1); }
+    .essay-page.is-resolved .bridge-line { opacity: 1; transform: scaleX(1); background: var(--blue); }
+    .essay-page.is-resolved .repair-caption { opacity: 1; }
+
+    /* 03: rain threshold */
+    .rain-threshold { min-height: 650px; background: #fff; overflow: visible; }
+    .rain-scene { position: relative; height: 410px; overflow: hidden; border-bottom: 1px solid var(--line); background: #fff; }
+    .rain-memory { position:absolute; inset:0 48% 0 0; overflow:hidden; background:#0b1738; clip-path:polygon(0 0,100% 0,88% 100%,0 100%); }
+    .rain-memory img { width:100%; height:100%; object-fit:cover; object-position:50% 62%; filter:saturate(.9) contrast(1.04); transform:scale(1.035); transition:transform 1200ms cubic-bezier(.2,.75,.2,1),filter 700ms ease; }
+    .rain-memory::after { content:""; position:absolute; inset:0; background:linear-gradient(90deg,rgb(7 18 49 / 4%),rgb(7 18 49 / 30%)); }
+    .rain-inside { position:absolute; inset:0 0 0 46%; background:linear-gradient(90deg,rgb(255 255 255 / 68%),#fff 24%); }
+    .rain-zone-label { position: absolute; top: 22px; z-index: 8; font-size: 10px; letter-spacing: .12em; }
+    .rain-zone-label.outside { left: 24px; color:#adc0ff; }.rain-zone-label.inside { right: 24px; color:var(--blue); }
+    .rain-lines { position: absolute; inset: 0 52% 0 0; opacity: .06; background: repeating-linear-gradient(108deg,transparent 0 24px,#bed0ff 25px,#bed0ff 27px,transparent 28px 46px); background-size: 64px 76px; transition: opacity 900ms ease; animation: rainTravel 1.4s linear infinite; }
+    @keyframes rainTravel { to { background-position: 40px 76px; } }
+    .threshold-door { position: absolute; left: 49%; top: 55px; bottom: 48px; width: 116px; transform: translateX(-50%); border: 2px solid var(--blue); background:linear-gradient(90deg,#0d1837 0 42%,#fff 42%); box-shadow: 0 0 0 12px rgb(24 71 255 / 5%); z-index: 4; }
+    .threshold-door::after { content:""; position:absolute; right:13px; top:50%; width:7px; height:7px; border-radius:50%; background:var(--blue); }
+    .threshold-ring { position:absolute; left:49%; top:48%; width:180px; height:180px; border:1px solid var(--blue); border-radius:50%; opacity:0; transform:translate(-50%,-50%) scale(.3); z-index:3; }
+    .indoor-safety { position:absolute; right:5%; top:50%; width:31%; transform:translateY(-50%); color:var(--gray-dark); }
+    .indoor-safety small { display:block; margin-bottom:18px; color:var(--blue); font-size:10px; font-weight:700; letter-spacing:.12em; }
+    .indoor-safety p { margin:0; padding:16px 0; border-top:1px solid var(--line); font:21px/1.25 var(--serif); }
+    .indoor-safety p:last-child { border-bottom:1px solid var(--line); }
+    .threshold-caption { position:absolute; left:49%; bottom:16px; color:var(--blue); transform:translateX(-50%); font:20px/1 var(--serif); opacity:0; transition:opacity 450ms ease 700ms; z-index:8; white-space:nowrap; }
+    .event-pool { display:grid; grid-template-columns:repeat(3,1fr); gap:1px; padding-top:1px; background:var(--line); }
+    .event-fragment { min-height:74px; border:0; padding:13px 16px; color:var(--ink); background:#fff; text-align:left; font:13px/1.5 var(--sans); cursor:pointer; transition:color 180ms ease,background 180ms ease,opacity 180ms ease; }
+    .event-fragment:hover,.event-fragment:focus-visible{color:var(--blue);outline:none}.event-fragment[aria-pressed="true"]{color:var(--blue);background:var(--blue-pale)}
+    .event-map { display:grid; grid-template-columns:1fr 190px; gap:1px; margin-top:1px; background:var(--line); border:1px solid var(--line); opacity:0; transform:translateY(12px); transition:opacity 450ms ease 500ms,transform 450ms ease 500ms; }
+    .causal-track { display:grid; grid-template-columns:repeat(5,1fr); gap:1px; min-height:92px; background:var(--line); }
+    .event-rail { display:grid; gap:1px; background:var(--line); }
+    .event-slot { min-height:68px; padding:12px; background:#fff; color:var(--gray-dark); font-size:12px; line-height:1.45; }
+    .event-slot small { display:block; margin-bottom:5px; color:var(--blue); font-weight:700; letter-spacing:.08em; }
+    .event-slot .event-fragment { min-height:0; padding:0; color:var(--blue); background:transparent; }
+    .essay-page.is-resolved .rain-lines { opacity:.78; }
+    .essay-page.is-resolved .rain-memory img { transform:scale(1.09) translateX(2%); filter:saturate(1.05) contrast(1.08); }
+    .essay-page.is-resolved .threshold-ring { animation:thresholdSignal 1.7s ease 450ms both; }
+    @keyframes thresholdSignal { 0%{opacity:0;transform:translate(-50%,-50%) scale(.3)}45%{opacity:.35;transform:translate(-50%,-50%) scale(1)}100%{opacity:0;transform:translate(-50%,-50%) scale(1.45)} }
+    .essay-page.is-resolved .threshold-caption { opacity:1; }
+    .essay-page.is-resolved .event-map { opacity:1; transform:none; }
+
+    /* 04: viewpoint convergence */
+    .viewpoint-worlds { min-height:430px; display:grid; grid-template-columns:1fr 150px 1fr; align-items:stretch; }
+    .view-world { display:flex; flex-direction:column; justify-content:center; padding:38px; transition:transform 900ms cubic-bezier(.2,.75,.2,1),background 700ms ease; }
+    .view-world.left { background:#f8f9fc; transform:translateX(-18px); }.view-world.right{background:var(--pale-blue,#eef1ff);transform:translateX(18px)}
+    .view-world small{color:var(--blue);font-weight:700;letter-spacing:.08em}.view-world h3{margin:12px 0 22px;font:500 30px/1.15 var(--serif)}
+    .world-term{padding:13px 0;border-top:1px solid var(--line);font:21px/1.35 var(--serif)}
+    .seeing-node{position:relative;display:grid;place-items:center;color:var(--blue);font:500 27px/1 var(--serif);opacity:0;transform:scale(.35);transition:opacity 600ms ease 400ms,transform 800ms cubic-bezier(.2,.75,.2,1) 400ms}
+    .seeing-node::before,.seeing-node::after{content:"";position:absolute;top:50%;width:46px;height:1px;background:var(--blue);transform:scaleX(0);transition:transform 500ms ease 650ms}.seeing-node::before{right:100%;transform-origin:right}.seeing-node::after{left:100%;transform-origin:left}
+    .essay-page.is-resolved .view-world.left,.essay-page.is-resolved .view-world.right{transform:none}.essay-page.is-resolved .seeing-node{opacity:1;transform:scale(1)}.essay-page.is-resolved .seeing-node::before,.essay-page.is-resolved .seeing-node::after{transform:scaleX(1)}
+
+    /* 05: apology layers */
+    .apology-layers { min-height:470px; display:grid; grid-template-columns:repeat(3,1fr); gap:24px; align-items:center; padding:40px 0; }
+    .apology-layer { position:relative; min-height:250px; border:1px solid var(--line); padding:26px; color:var(--ink); background:#fff; text-align:left; cursor:pointer; transition:border-color 240ms ease,transform 500ms cubic-bezier(.2,.75,.2,1),background 240ms ease; }
+    .apology-layer:hover,.apology-layer:focus-visible{border-color:var(--blue);outline:none}.apology-layer[aria-expanded="true"]{border-color:var(--blue);background:rgb(220 226 255 / 24%);transform:translateY(-8px)}
+    .apology-layer small{color:var(--blue);font-weight:700;letter-spacing:.08em}.apology-layer h3{margin:24px 0 18px;font:500 31px/1.15 var(--serif)}.apology-layer p{margin:0;color:var(--gray-dark);line-height:1.65;opacity:.32;transition:opacity 300ms ease}.apology-layer[aria-expanded="true"] p{opacity:1}
+    .layer-verdict{position:absolute;left:50%;bottom:16px;transform:translateX(-50%);color:var(--blue);font-size:12px;font-weight:700;opacity:0;transition:opacity 300ms ease}.apology-layer[aria-expanded="true"] .layer-verdict{opacity:1}
+    .repair-formula{grid-column:1/-1;display:flex;justify-content:center;align-items:center;gap:18px;color:var(--gray);font:clamp(25px,2.4vw,44px)/1 var(--serif);opacity:0;transform:translateY(10px);transition:opacity 500ms ease,transform 500ms ease}.repair-formula strong{color:var(--blue);font-weight:500}.essay-page.is-resolved .repair-formula{opacity:1;transform:none}
+
+    /* 06: abstraction */
+    .abstraction-stage { min-height:440px; }
+    .concrete-row,.abstract-row{position:absolute;left:8%;right:8%;top:42%;display:grid;grid-template-columns:repeat(3,1fr);gap:40px;transform:translateY(-50%)}
+    .concrete-token,.abstract-token{display:grid;place-items:center;min-height:130px;border-bottom:1px solid var(--line);font:500 clamp(27px,2.8vw,50px)/1 var(--serif);text-align:center;transition:opacity 700ms ease,transform 850ms cubic-bezier(.2,.75,.2,1),filter 700ms ease}
+    .concrete-token{color:var(--ink)}.abstract-row{opacity:0}.abstract-token{color:var(--blue);transform:translateY(28px)}
+    .theme-final-axis{position:absolute;left:50%;bottom:42px;display:grid;grid-template-columns:1fr 110px 1fr;align-items:center;width:min(720px,84%);transform:translateX(-50%);opacity:0;transition:opacity 600ms ease 700ms}.theme-final-axis strong{font:500 clamp(31px,3vw,55px)/1 var(--serif);text-align:center}.theme-final-axis strong:last-child{color:var(--blue)}.theme-final-axis span{height:1px;background:var(--blue);transform:scaleX(0);transition:transform 650ms ease 900ms}
+    .essay-page.is-resolved .concrete-token{opacity:0;filter:blur(6px);transform:translateY(-26px) scale(.92)}.essay-page.is-resolved .abstract-row{opacity:1}.essay-page.is-resolved .abstract-token{transform:none}.essay-page.is-resolved .theme-final-axis{opacity:1}.essay-page.is-resolved .theme-final-axis span{transform:scaleX(1)}
+
+    @media (max-width: 900px) {
+      .essay-page .analysis-inner { width: 100%; }
+      .essay-question { font-size: clamp(36px, 9vw, 58px); }
+      .essay-choice,.essay-choice:nth-child(even){border-right:0;padding-left:4px}
+      .relation-node{width:82px;height:82px;font-size:19px}.relation-node.narrator{left:5%}.relation-node.toby{right:5%}.essay-page.is-resolved .relation-node.narrator{left:8%}.essay-page.is-resolved .relation-node.toby{right:8%}
+      .bridge-node{width:88px;height:88px}.bridge-node.gift{left:4%}.bridge-node.brother{right:4%}.bridge-understanding{width:94px;height:94px}.bridge-line{left:18%;right:18%}
+      .rain-threshold{min-height:830px}.rain-scene{height:540px}.rain-memory{inset:0 0 48% 0;clip-path:polygon(0 0,100% 0,100% 88%,0 100%)}.rain-inside{inset:48% 0 0 0;background:linear-gradient(180deg,rgb(255 255 255 / 70%),#fff 20%)}.rain-lines{inset:0 0 52% 0}.rain-zone-label.inside{top:292px}.threshold-door{left:50%;top:206px;bottom:auto;height:146px;width:88px}.threshold-ring{left:50%;top:52%}.indoor-safety{right:8%;left:8%;top:auto;bottom:26px;width:auto;transform:none}.indoor-safety small{margin-bottom:8px}.indoor-safety p{display:inline-block;width:49%;padding:12px 0;font-size:17px;text-align:center}.threshold-caption{left:50%;bottom:166px;font-size:16px}.event-pool{grid-template-columns:1fr 1fr}.event-map{grid-template-columns:1fr}.causal-track{grid-template-columns:1fr}.event-rail{grid-template-columns:1fr 1fr}
+      .viewpoint-worlds{grid-template-columns:1fr;min-height:690px}.view-world{padding:28px}.seeing-node{min-height:100px}.seeing-node::before,.seeing-node::after{left:50%;right:auto;top:auto;width:1px;height:28px;transform:scaleY(0)}.seeing-node::before{bottom:100%;transform-origin:bottom}.seeing-node::after{top:100%;transform-origin:top}.essay-page.is-resolved .seeing-node::before,.essay-page.is-resolved .seeing-node::after{transform:scaleY(1)}
+      .apology-layers{grid-template-columns:1fr;gap:12px}.apology-layer{min-height:190px}.repair-formula{flex-wrap:wrap;line-height:1.25}
+      .concrete-row,.abstract-row{left:2%;right:2%;gap:8px}.concrete-token,.abstract-token{font-size:clamp(23px,7vw,34px)}.theme-final-axis{grid-template-columns:1fr 50px 1fr;width:94%}
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      .essay-page .relation-node.brother,.essay-page .bridge-understanding,.essay-page .seeing-node,.essay-page .abstract-row,.essay-page .theme-final-axis,.essay-page .repair-formula{opacity:1;transform:none}
+      .essay-page .relation-link,.essay-page .seeing-node::before,.essay-page .seeing-node::after,.essay-page .theme-final-axis span{transform:none}
+      .essay-page .bridge-question,.essay-page .concrete-row{display:none}
+      .rain-lines{opacity:.65;animation:none}.event-map{opacity:1;transform:none}
+    }
+
+    /* Revised editorial storytelling */
+    .stage-one { min-height: auto; padding: 9vh 0 13vh; }
+    .stage-one .analysis-inner { width: min(1120px,82vw); }
+    .stage-one-note { max-width: 700px; margin-bottom: 9vh; color: var(--gray); font-size: 16px; line-height: 1.9; }
+    .reading-pause { position: relative; padding: 0 0 10vh; }
+    .reading-pause + .reading-pause { padding-top: 10vh; border-top: 1px solid var(--line); }
+    .reading-pause-label { margin: 0 0 20px; color: var(--blue); font-size: 11px; font-weight: 700; letter-spacing: .1em; }
+    .reading-sentence { max-width: 930px; margin: 0 0 7vh; padding-left: 20px; border-left: 2px solid var(--blue); color: var(--gray-dark); font: clamp(28px,3vw,48px)/1.35 var(--serif); letter-spacing: -.025em; }
+    .reading-sentence strong { color: var(--blue); font-weight: 500; }
+    .reading-prompt { max-width: 760px; }
+    .reading-prompt h2 { margin: 0; font: 500 clamp(30px,2.7vw,46px)/1.15 var(--serif); letter-spacing: -.035em; }
+    .reading-prompt p { margin: 12px 0 0; color: var(--gray-dark); line-height: 1.7; }
+    .reading-interaction { display: grid; grid-template-columns: minmax(0,1.5fr) minmax(240px,.5fr); gap: 7vw; align-items: start; margin-top: 38px; }
+    .fragment-label,.annotation-label { display:block; margin:0 0 13px; color:var(--blue); font-size:10px; font-weight:700; letter-spacing:.1em; }
+    .editorial-fragments { border-top: 1px solid var(--line); }
+    .editorial-fragment { display: block; width: 92%; padding: 17px 0; border: 0; border-bottom: 1px solid var(--line); color: var(--gray-dark); background: transparent; text-align: left; font: 15px/1.65 var(--sans); cursor: pointer; transition: color 220ms ease, padding-left 300ms ease; }
+    .editorial-fragment::before { content: ""; display: inline-block; width: 0; height: 1px; margin-right: 0; vertical-align: middle; background: var(--blue); transition: width 300ms ease, margin-right 300ms ease; }
+    .editorial-fragment:hover,.editorial-fragment:focus-visible,.editorial-fragment[aria-pressed="true"] { color: var(--blue); outline: none; }
+    .editorial-fragment[aria-pressed="true"] { padding-left: 4px; }
+    .editorial-fragment[aria-pressed="true"]::before { width: 24px; margin-right: 12px; }
+    .mini-annotation { min-height: 260px; padding: 22px 0; border-top: 1px solid var(--blue); border-bottom: 1px solid var(--line); }
+    .mini-annotation p { margin: 0; color: var(--gray-dark); font-size: 13px; line-height: 1.8; }
+    .mini-annotation .annotation-copy { min-height: 92px; }
+    .mini-relation { position: relative; height: 118px; margin-top: 22px; }
+    .mini-relation span { position: absolute; top: 42px; color: var(--gray-dark); font: 18px/1 var(--serif); transition: color 400ms ease,transform 650ms cubic-bezier(.2,.75,.2,1),opacity 400ms ease; }
+    .mini-relation .mini-left { left: 0; }.mini-relation .mini-right { right: 0; color: var(--blue); }.mini-relation .mini-center { left: 50%; color: var(--blue); opacity: 0; transform: translateX(-50%) scale(.5); }
+    .mini-relation i { position: absolute; top: 49px; height: 1px; background: var(--blue); transform: scaleX(0); transition: transform 500ms ease 220ms; }
+    .mini-relation .line-left { left: 20%; width: 25%; transform-origin: right; }.mini-relation .line-right { right: 20%; width: 25%; transform-origin: left; }
+    .reading-pause.is-resolved .mini-center { opacity: 1; transform: translateX(-50%) scale(1); }
+    .reading-pause.is-resolved .mini-relation i { transform: scaleX(1); }
+    .reading-pause.is-resolved .editorial-note { opacity: 1; transform: none; }
+    .concept-equation { display:flex; flex-direction:column; justify-content:center; align-items:flex-start; gap:13px; height:118px; margin-top:22px; color:var(--gray-dark); font:17px/1.35 var(--serif); }
+    .concept-equation span { padding-bottom:10px; border-bottom:1px solid var(--line); }
+    .concept-equation strong { color: var(--blue); font-weight: 500; opacity: .18; transform: translateY(8px); transition: opacity 500ms ease,transform 500ms ease; }
+    .reading-pause.is-resolved .concept-equation strong { opacity: 1; transform: none; }
+    .stage-one-next { margin-top: 0; }
+
+    .editorial-page { --editorial-title-size:clamp(34px,3vw,52px); min-height: 100vh; padding: 10vh 0 12vh; }
+    .editorial-page .analysis-inner { width: min(1120px,82vw); }
+    .editorial-page .essay-question { max-width:940px; font-size:var(--editorial-title-size); line-height:1.12; }
+    .editorial-action { border: 0; padding: 8px 0; color: var(--blue); background: transparent; border-bottom: 1px solid currentColor; font-size: 12px; font-weight: 700; letter-spacing: .04em; cursor: pointer; }
+    .editorial-action:focus-visible { outline: 2px solid rgb(24 71 255 / 26%); outline-offset: 5px; }
+    .editorial-note { margin-top: 38px; padding-top: 26px; border-top: 1px solid var(--line); color: var(--gray-dark); line-height: 1.8; opacity: 0; transform: translateY(8px); transition: opacity 450ms ease,transform 450ms ease; }
+    .editorial-page.is-resolved .editorial-note { opacity: 1; transform: none; }
+
+    .conflict-layout { display: grid; grid-template-columns: .65fr 1.15fr .95fr; gap: 4vw; align-items: center; min-height: 590px; margin-top: 5vh; }
+    .context-notes { display: grid; gap: 52px; color: var(--gray); font-size: 13px; line-height: 1.7; }
+    .context-note { position: relative; padding-left: 18px; }
+    .context-note::before { content:""; position:absolute; left:0; top:.75em; width:10px; border-top:1px dashed #afb3bf; }
+    .event-chain { position: relative; padding-left: 34px; border-left:1px solid var(--line); }
+    .event-chain::after { content:""; position:absolute; left:-1px; top:0; width:1px; height:var(--chain-height,0%); background:var(--blue); transition:height 650ms cubic-bezier(.2,.75,.2,1); }
+    .chain-node { position:relative; display:block; width:100%; padding:20px 0; border:0; color:var(--gray); background:transparent; text-align:left; font:500 22px/1.35 var(--serif); cursor:pointer; transition:color 300ms ease,transform 400ms ease; }
+    .chain-node:hover,.chain-node:focus-visible,.chain-node[aria-pressed="true"] { color:var(--ink); outline:none; transform:translateX(4px); }
+    .chain-node[aria-pressed="true"]::after { content:""; position:absolute; left:-34px; top:50%; width:18px; height:1px; background:var(--blue); }
+    .chain-node:last-child[aria-pressed="true"] { color:var(--blue); }
+    .threshold-illustration { position:relative; --rain-strength:.05; height:410px; overflow:hidden; border-left:1px solid var(--line); background:linear-gradient(90deg,rgb(225 232 255 / 20%) 0 53%,#fff 53% 100%); }
+    .threshold-field { display:block; width:100%; height:100%; }
+    .threshold-illustration .rain-lines { position:static; opacity:var(--rain-strength); fill:none; stroke:#8fabff; stroke-width:1.25; background:none; mask-image:none; transition:opacity 520ms ease; animation:editorialRain 1.35s linear infinite; transform-box:fill-box; transform-origin:center; }
+    .threshold-illustration .rain-lines line:nth-child(3n) { opacity:.45; }
+    .threshold-illustration .rain-lines line:nth-child(3n + 1) { opacity:.72; }
+    .threshold-boundary { stroke:var(--line); stroke-width:1; }
+    .editorial-door { position:static; transform:none; fill:rgb(255 255 255 / 72%); stroke:var(--blue); stroke-width:1.35; stroke-linejoin:round; stroke-dasharray:650; stroke-dashoffset:650; opacity:.18; transition:stroke-dashoffset 900ms cubic-bezier(.2,.75,.2,1),opacity 420ms ease; }
+    .door-knob { fill:var(--blue); opacity:0; transition:opacity 260ms ease 720ms; }
+    .door-label { position:absolute; left:50%; bottom:12px; width:220px; transform:translateX(-50%) translateY(6px); color:var(--gray-dark); font-size:13px; line-height:1.6; text-align:center; opacity:0; transition:color 400ms ease,opacity 400ms ease 520ms,transform 400ms ease 520ms; }
+    .editorial-page.is-resolved .editorial-door { stroke-dashoffset:0; opacity:1; }
+    .editorial-page.is-resolved .door-knob { opacity:1; }
+    .editorial-page.is-resolved .door-label { color:var(--blue); opacity:1; transform:translateX(-50%) translateY(0); }
+
+    .perspective-panel { display:grid; grid-template-columns:1fr 110px 1fr; min-height:520px; margin-top:5vh; border-top:1px solid var(--line); border-bottom:1px solid var(--line); }
+    .perspective-side { display:flex; flex-direction:column; justify-content:center; padding:54px 42px; transition:transform 850ms cubic-bezier(.2,.75,.2,1),opacity 650ms ease,background 650ms ease; }
+    .perspective-side.left { background:#fafafa; transform:translateX(-16px); }.perspective-side.right { background:var(--blue-pale); transform:translateX(16px); opacity:.45; }
+    .perspective-side small { color:var(--blue); font-weight:700; letter-spacing:.08em; }
+    .perspective-side h3 { margin:12px 0 30px; font:500 31px/1.15 var(--serif); }
+    .perspective-term { padding:14px 0; border-top:1px solid var(--line); font:21px/1.3 var(--serif); }
+    .perspective-door { display:grid; place-items:center; position:relative; color:var(--blue); }
+    .perspective-door::before { content:""; position:absolute; top:16%; bottom:16%; left:50%; width:52px; transform:translateX(-50%); border:1px solid var(--blue); background:#fff; transition:width 700ms ease,opacity 500ms ease; }
+    .perspective-door button { position:relative; z-index:2; border:0; padding:9px 0; color:var(--blue); background:#fff; border-bottom:1px solid currentColor; font-weight:700; cursor:pointer; }
+    .perspective-caption { margin:26px 0 0; text-align:center; color:var(--gray-dark); }
+    .editorial-page.is-resolved .perspective-side { transform:none; opacity:1; }
+    .editorial-page.is-resolved .perspective-door::before { width:1px; opacity:.35; }
+
+    .repair-paths { position:relative; display:flex; flex-direction:column; gap:0; width:min(860px,100%); min-height:440px; margin:6vh 0 0 8%; padding:0 0 48px; }
+    .repair-path { position:relative; width:72%; border:0; padding:25px 0; color:var(--gray-dark); background:transparent; border-top:1px solid var(--line); text-align:left; cursor:pointer; transition:color 300ms ease,border-color 300ms ease,transform 450ms ease; }
+    .repair-path:nth-child(2) { margin-left:9%; }.repair-path:nth-child(3) { margin-left:18%; }
+    .repair-path:hover,.repair-path:focus-visible,.repair-path[aria-pressed="true"] { color:var(--blue); border-color:var(--blue); outline:none; transform:translateY(-5px); }
+    .repair-path small { display:none; }
+    .repair-path strong { display:block; margin-bottom:10px; color:inherit; font:500 26px/1.25 var(--serif); }
+    .repair-path span { color:var(--gray); font-size:13px; line-height:1.7; }
+    .repair-path::after { display:none; }
+
+    .theme-fade { position:relative; min-height:540px; margin-top:5vh; overflow:hidden; border-top:1px solid var(--line); border-bottom:1px solid var(--line); }
+    .theme-peel { width:min(780px,82%); margin:54px auto 110px; }
+    .theme-peel p { display:grid; grid-template-columns:120px 1fr; gap:28px; margin:0; padding:19px 0; border-bottom:1px solid var(--line); color:var(--gray); opacity:.24; transform:translateY(10px); transition:opacity 520ms ease,transform 520ms ease; }
+    .theme-peel strong { color:var(--ink); font:500 24px/1.3 var(--serif); }.theme-peel span{line-height:1.7}
+    .theme-peel .theme-remains { grid-template-columns:1fr; margin-top:28px; border-bottom:0; color:var(--blue); font:500 28px/1.4 var(--serif); }
+    .editorial-page.is-resolved .theme-peel p { opacity:1; transform:none; }
+    .editorial-page.is-resolved .theme-peel p:nth-child(1){transition-delay:80ms}.editorial-page.is-resolved .theme-peel p:nth-child(2){transition-delay:300ms}.editorial-page.is-resolved .theme-peel p:nth-child(3){transition-delay:520ms}.editorial-page.is-resolved .theme-peel p:nth-child(4){transition-delay:780ms}
+    .theme-trigger { position:absolute; left:50%; bottom:34px; z-index:3; transform:translateX(-50%); }
+
+    @media (max-width:900px) {
+      .stage-one .analysis-inner,.editorial-page .analysis-inner { width:100%; }
+      .stage-one-note { margin-bottom:7vh; font-size:15px; }
+      .reading-interaction { grid-template-columns:1fr; gap:30px; }
+      .mini-annotation { min-height:220px; }
+      .conflict-layout { grid-template-columns:1fr; gap:40px; min-height:auto; }
+      .context-notes { grid-template-columns:1fr 1fr; gap:20px; order:2; }
+      .event-chain { order:1; }.threshold-illustration { order:3; height:330px; border-left:0; border-top:1px solid var(--line); }
+      .perspective-panel { grid-template-columns:1fr; }.perspective-door { min-height:100px; }.perspective-door::before { top:10px; bottom:10px; width:46px; }
+      .perspective-side { padding:36px 26px; }.perspective-side.left,.perspective-side.right { transform:none; }
+      .repair-paths { margin-left:0; }.repair-path,.repair-path:nth-child(2),.repair-path:nth-child(3){width:100%;margin-left:0}
+      .theme-peel{width:94%;}.theme-peel p{grid-template-columns:90px 1fr;gap:18px}.theme-peel .theme-remains{grid-template-columns:1fr}
+    }
+
+    @media (min-width:901px) and (min-height:760px) {
+      .stage-one { height:100svh; min-height:760px; padding:clamp(30px,4vh,48px) 0 24px; overflow:hidden; scroll-snap-align:start; }
+      .stage-one .analysis-inner { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); grid-template-rows:auto 1fr auto; column-gap:4.5vw; height:100%; }
+      .stage-one-note { grid-column:1/-1; margin:0 0 2.5vh; font-size:13px; line-height:1.65; }
+      .reading-pause { min-width:0; padding:0; }
+      .reading-pause + .reading-pause { padding:0 0 0 4.5vw; border-top:0; border-left:1px solid var(--line); }
+      .reading-pause-label { margin-bottom:10px; }
+      .reading-sentence { min-height:82px; margin:0 0 2.2vh; padding:10px 0 10px 16px; font-size:clamp(24px,2.15vw,35px); line-height:1.24; }
+      .reading-prompt h2 { font-size:clamp(27px,2.3vw,38px); }
+      .reading-prompt p { margin-top:7px; font-size:13px; }
+      .reading-interaction { display:block; margin-top:18px; }
+      .fragment-label { margin-bottom:6px; }
+      .editorial-fragment { width:100%; padding:8px 0; font-size:13px; line-height:1.45; }
+      .editorial-fragment[aria-pressed="true"]::before { width:16px; margin-right:8px; }
+      .mini-annotation { display:grid; grid-template-columns:minmax(0,.75fr) minmax(150px,1fr); gap:18px; align-items:center; min-height:88px; margin-top:14px; padding:10px 0; }
+      .mini-annotation .annotation-label { grid-column:1; grid-row:1; align-self:end; }
+      .mini-annotation .annotation-copy { grid-column:1; grid-row:2; align-self:start; }
+      .mini-annotation .mini-relation,.mini-annotation .concept-equation { grid-column:2; grid-row:1 / span 2; }
+      .mini-annotation .annotation-copy { min-height:0; font-size:11px; line-height:1.55; }
+      .annotation-label { margin-bottom:5px; }
+      .mini-relation,.concept-equation { height:66px; margin-top:0; }
+      .mini-relation span { top:25px; font-size:14px; }.mini-relation i{top:31px}.mini-relation .line-left{left:23%;width:21%}.mini-relation .line-right{right:23%;width:21%}
+      .concept-equation { gap:7px; font-size:13px; }.concept-equation span{padding-bottom:6px}
+      .reading-pause .editorial-note { margin-top:14px; padding-top:12px; font-size:12px; line-height:1.55; }
+      .stage-one-next { grid-column:1/-1; margin:4px auto 0; }
+
+      .editorial-page { height:100svh; min-height:760px; padding:clamp(34px,5vh,58px) 0 24px; overflow:hidden; scroll-snap-align:start; }
+      .editorial-page .analysis-inner { display:flex; flex-direction:column; height:100%; }
+      .editorial-page .essay-head { flex:0 0 auto; }
+      .editorial-page .essay-question { font-size:clamp(32px,2.75vw,48px); }
+      .conflict-layout { flex:1 1 auto; min-height:0; margin-top:2.5vh; gap:3vw; }
+      .context-notes { gap:28px; font-size:12px; }.chain-node{padding:14px 0;font-size:19px}.threshold-illustration{height:min(42vh,380px)}
+      .perspective-panel { flex:1 1 auto; min-height:0; height:min(54vh,480px); margin-top:3vh; }.perspective-side{padding:34px}.perspective-side h3{margin-bottom:20px;font-size:27px}.perspective-term{padding:11px 0;font-size:18px}.perspective-caption{margin-top:14px}
+      .repair-paths { flex:1 1 auto; min-height:0; margin-top:4vh; padding-bottom:14px; }.repair-path{padding:17px 0}.repair-path strong{font-size:23px}.repair-path span{font-size:12px}
+      .theme-fade { flex:1 1 auto; min-height:0; height:min(56vh,490px); margin-top:3vh; }.theme-peel{margin:32px auto 72px}.theme-peel p{padding:14px 0}.theme-peel strong{font-size:21px}.theme-peel .theme-remains{margin-top:18px;font-size:25px}
+      .editorial-page .editorial-note { margin-top:14px; padding-top:14px; font-size:13px; line-height:1.55; }
+      .editorial-page .editorial-action { margin-top:4px; }
+      .editorial-page .module-next { margin-top:2px; padding-top:2px; padding-bottom:2px; font-size:26px; }
+    }
+
+    @media (prefers-reduced-motion:reduce) {
+      .editorial-fragment,.mini-relation span,.mini-relation i,.concept-equation strong,.chain-node,.perspective-side,.perspective-door::before,.repair-path,.theme-peel p { transition:none!important; }
+      .threshold-illustration .rain-lines { animation:none!important; }
+    }
+
+    @keyframes editorialRain { to { transform:translate(8px,28px); } }
+
+    .float-title-line { font-kerning: none; }
+
+    .float-title-line .char {
+      display: inline-block;
+      animation: glyphFloat var(--float-duration, 4s) ease-in-out var(--float-delay, 0s) infinite;
+      will-change: transform;
+    }
+
+    @keyframes glyphFloat {
+      0%, 100% { transform: translate3d(0, 0, 0) rotate(0); }
+      50% { transform: translate3d(0, calc(var(--float-y, 2) * -1px), 0) rotate(calc(var(--float-r, .15) * 1deg)); }
+    }
+
+    .scoring-page { --score-title:clamp(34px,3vw,50px); }
+    .scoring-inner { width:min(1120px,82vw); margin:auto; }
+    .scoring-kicker { margin:0 0 14px; color:var(--blue); font-size:11px; font-weight:800; letter-spacing:.14em; text-transform:uppercase; }
+    .scoring-title { max-width:920px; margin:0; font:500 var(--score-title)/1.14 var(--serif); letter-spacing:-.035em; }
+    .scoring-lead { max-width:700px; margin:18px 0 0; color:var(--gray-dark); font-size:15px; line-height:1.8; }
+    .sample-sheet { display:grid; grid-template-columns:1fr 1fr; gap:0; margin-top:4vh; border-top:1px solid var(--line); border-bottom:1px solid var(--line); }
+    .sample-column { min-width:0; padding:24px 30px 22px 0; }
+    .sample-column + .sample-column { padding-left:30px; border-left:1px solid var(--line); }
+    .sample-starter { margin:0 0 14px; padding-left:13px; border-left:2px solid var(--blue); color:var(--blue); font:600 18px/1.45 var(--serif); }
+    .sample-body { margin:0; color:#33343a; font:16px/1.58 var(--serif); }
+    .sample-note { margin:13px 0 0; color:var(--gray); font-size:11px; }
+    .score-ask { place-items:center; text-align:center; }
+    .score-control { width:min(760px,82vw); margin:7vh auto 0; }
+    .score-output { color:var(--blue); font:500 clamp(76px,9vw,138px)/.8 var(--serif); letter-spacing:-.06em; }
+    .score-range { width:100%; height:2px; margin:48px 0 15px; appearance:none; background:linear-gradient(90deg,var(--blue) 0 var(--range-progress,50%),var(--line) var(--range-progress,50%) 100%); cursor:pointer; }
+    .score-range::-webkit-slider-thumb { width:17px; height:17px; appearance:none; border:2px solid var(--blue); border-radius:50%; background:#fff; }
+    .score-range::-moz-range-thumb { width:15px; height:15px; border:2px solid var(--blue); border-radius:50%; background:#fff; }
+    .score-scale { display:flex; justify-content:space-between; color:var(--gray); font:13px/1 var(--serif); }
+    .score-submit,.scoring-next,.fact-choice { border:0; background:transparent; cursor:pointer; }
+    .score-submit { margin-top:34px; padding:7px 0; border-bottom:1px solid currentColor; color:var(--blue); font-size:13px; font-weight:800; }
+    .score-response { margin:34px auto 0; color:var(--gray-dark); font-size:15px; line-height:1.8; }
+    .score-response[hidden],.scoring-next[hidden],.fact-explanation[hidden] { display:none; }
+    .scoring-next { display:block; margin:22px auto 0; padding:5px 14px; color:var(--blue); font:30px/1 var(--serif); }
+    .essayflow-arrival { display:grid; grid-template-columns:1fr 90px 1fr; align-items:center; margin-top:8vh; }
+    .arrival-side { padding:35px 0; border-top:1px solid var(--line); border-bottom:1px solid var(--line); }
+    .arrival-side small { display:block; margin-bottom:14px; color:var(--gray); font-size:11px; font-weight:800; letter-spacing:.12em; }
+    .arrival-side strong { font:500 clamp(28px,3vw,46px)/1.1 var(--serif); }
+    .arrival-arrow { color:var(--blue); font:42px/1 var(--serif); text-align:center; }
+    .arrival-lock { color:var(--blue); }
+    .scoring-questions { margin:6vh 0 0; padding:0; border-top:1px solid var(--line); list-style:none; counter-reset:question; }
+    .scoring-questions li { display:grid; grid-template-columns:70px 1fr; align-items:center; min-height:112px; border-bottom:1px solid var(--line); font:500 clamp(24px,2.35vw,38px)/1.2 var(--serif); counter-increment:question; }
+    .scoring-questions li::before { content:"0" counter(question); color:var(--blue); font:700 11px/1 var(--sans); letter-spacing:.12em; }
+    .score-reveal { place-items:center; color:#fff; background:var(--blue); text-align:center; }
+    .score-reveal-number { margin:0; font:500 clamp(230px,32vw,480px)/.62 var(--serif); letter-spacing:-.12em; }
+    .score-reveal-meta { margin:6vh 0 0; font:20px/1.5 var(--serif); }
+    .score-reveal-question { margin:24px 0 0; color:rgb(255 255 255 / 72%); font-size:14px; }
+    .score-judgements { margin-top:4vh; border-top:1px solid var(--line); }
+    .score-judgement { display:grid; grid-template-columns:58px 180px 1fr; gap:20px; align-items:center; min-height:104px; border-bottom:1px solid var(--line); }
+    .score-judgement-number { color:var(--blue); font:700 11px/1 var(--sans); letter-spacing:.12em; }
+    .score-judgement h3 { margin:0; font:500 25px/1.15 var(--serif); }
+    .score-judgement-copy { min-width:0; }
+    .score-judgement-status { display:block; margin-bottom:6px; color:var(--blue); font-size:11px; font-weight:800; letter-spacing:.08em; }
+    .score-judgement.problem .score-judgement-status { color:var(--gray-dark); }
+    .score-judgement p { margin:0; color:var(--gray-dark); font-size:13px; line-height:1.55; }
+    .fact-layout { display:grid; grid-template-columns:.85fr 1.15fr; gap:7vw; align-items:start; margin-top:5vh; }
+    .fact-quote { margin:0; padding:22px 0; border-top:1px solid var(--line); border-bottom:1px solid var(--line); font:500 clamp(27px,3vw,46px)/1.25 var(--serif); }
+    .fact-choices { border-top:1px solid var(--line); }
+    .fact-choice { display:block; width:100%; padding:18px 0; border-bottom:1px solid var(--line); color:var(--ink); text-align:left; font:18px/1.45 var(--serif); }
+    .fact-choice::before { content:""; display:inline-block; width:0; height:1px; margin-right:0; background:var(--blue); vertical-align:middle; transition:width 300ms ease,margin 300ms ease; }
+    .fact-choice[aria-pressed="true"] { color:var(--blue); }
+    .fact-choice[aria-pressed="true"]::before { width:20px; margin-right:10px; }
+    .fact-explanation { grid-column:1/-1; display:grid; grid-template-columns:1fr 42px 1fr; align-items:center; margin-top:3vh; padding-top:3vh; border-top:1px solid var(--line); }
+    .fact-evidence { font:500 25px/1.35 var(--serif); }
+    .fact-connector { color:var(--blue); font:32px/1 var(--serif); text-align:center; }
+    .fact-reading { color:var(--gray-dark); font-size:14px; line-height:1.75; }
+    .language-balance { display:grid; grid-template-columns:1fr 1fr; gap:7vw; margin-top:6vh; }
+    .language-side { padding-top:22px; border-top:1px solid var(--line); }
+    .language-side small { color:var(--blue); font-size:11px; font-weight:800; letter-spacing:.1em; }
+    .language-side h3 { margin:14px 0 24px; font:500 31px/1.15 var(--serif); }
+    .language-points { margin:0; padding:0; list-style:none; }
+    .language-points li { padding:12px 0; border-top:1px solid var(--line); font-size:15px; }
+    .language-hard-stop { color:var(--blue); font:500 24px/1.45 var(--serif); }
+    .language-conclusion { margin-top:5vh; padding-top:18px; border-top:1px solid var(--line); color:var(--gray-dark); font-size:14px; line-height:1.7; }
+    .scoring-closing { text-align:center; }
+    .scoring-closing .scoring-title { margin-left:auto; margin-right:auto; }
+    .scoring-cta { display:inline-block; margin-top:34px; padding:13px 0; border-bottom:1px solid currentColor; color:var(--blue); font-size:15px; font-weight:800; text-decoration:none; }
+
+    /* Real student scoring and rubric continuation */
+    .sample-authentic { color:var(--gray-dark); }
+    .sample-authentic strong { color:var(--ink); font-weight:600; }
+    .score-band-stage { display:grid; grid-template-columns:minmax(0,1fr) 260px; align-items:end; gap:6vw; width:min(1030px,82vw); margin:auto; text-align:left; }
+    .score-band-primary { margin:0; color:#fff; font:500 clamp(74px,9vw,140px)/.88 var(--serif); letter-spacing:-.065em; }
+    .score-band-primary span { display:block; margin-top:18px; font:500 clamp(30px,3vw,48px)/1 var(--serif); letter-spacing:-.035em; }
+    .score-band-result { padding-bottom:10px; border-bottom:1px solid rgb(255 255 255 / 48%); }
+    .score-band-result strong { display:block; color:#fff; font:500 clamp(90px,10vw,150px)/.8 var(--serif); letter-spacing:-.08em; }
+    .score-band-result span { display:block; margin-top:22px; color:rgb(255 255 255 / 72%); font-size:15px; }
+    .score-reveal .score-reveal-question { grid-column:1/-1; margin:42px 0 0; }
+    .judgement-reader { display:grid; grid-template-columns:235px 1fr; gap:5vw; margin-top:4vh; border-top:1px solid var(--line); border-bottom:1px solid var(--line); }
+    .judgement-index { border-right:1px solid var(--line); }
+    .judgement-tab { display:grid; grid-template-columns:34px 1fr; gap:12px; width:100%; padding:17px 18px 17px 0; border:0; border-bottom:1px solid var(--line); color:var(--gray-dark); background:transparent; text-align:left; cursor:pointer; }
+    .judgement-tab:last-child { border-bottom:0; }
+    .judgement-tab small { color:var(--blue); font:700 10px/1.5 var(--sans); letter-spacing:.1em; }
+    .judgement-tab strong { font:500 20px/1.25 var(--serif); }
+    .judgement-tab span { grid-column:2; font-size:11px; }
+    .judgement-tab[aria-pressed="true"] { color:var(--ink); }
+    .judgement-tab[aria-pressed="true"] strong { color:var(--blue); }
+    .judgement-tab.limit[aria-pressed="true"] strong { text-decoration:underline; text-decoration-thickness:1px; text-underline-offset:5px; }
+    .judgement-detail { min-height:420px; padding:26px 0 22px; }
+    .judgement-detail h3 { margin:0 0 17px; color:var(--blue); font:500 30px/1.2 var(--serif); }
+    .judgement-detail > p { margin:0; color:#34353a; font-size:14px; line-height:1.75; }
+    .judgement-evidence { margin-top:24px; padding-top:18px; border-top:1px solid var(--line); }
+    .judgement-evidence small { display:block; margin-bottom:10px; color:var(--gray); font-size:10px; font-weight:800; letter-spacing:.12em; }
+    .judgement-evidence blockquote { margin:0; color:var(--gray-dark); font:500 16px/1.55 var(--serif); }
+    .theme-comparison { grid-column:1/-1; display:grid; grid-template-columns:1fr 55px 1fr; align-items:center; gap:24px; margin-top:2.5vh; }
+    .theme-comparison[hidden] { display:none; }
+    #page-22 .fact-layout { margin-top:3.5vh; }
+    #page-22 .fact-quote { font-size:clamp(25px,2.45vw,38px); }
+    .theme-passage { min-width:0; padding:16px 0; border-top:1px solid var(--line); border-bottom:1px solid var(--line); }
+    .theme-passage small { display:block; margin-bottom:13px; color:var(--blue); font-size:10px; font-weight:800; letter-spacing:.12em; }
+    .theme-passage blockquote { margin:0; overflow-wrap:anywhere; font:500 clamp(16px,1.25vw,20px)/1.5 var(--serif); }
+    .theme-shift { color:var(--blue); font:36px/1 var(--serif); text-align:center; }
+    .theme-reading { grid-column:1/-1; margin:8px 0 0; padding-top:14px; border-top:1px solid var(--line); color:var(--gray-dark); font-size:13px; line-height:1.65; }
+    .language-issue-list { margin:0; padding:0; list-style:none; }
+    .language-issue-list li { display:grid; grid-template-columns:1fr 1fr; gap:24px; padding:13px 0; border-top:1px solid var(--line); font-size:13px; line-height:1.55; }
+    .language-issue-list code { color:var(--ink); font:500 14px/1.45 var(--serif); white-space:normal; }
+    .language-issue-list span { color:var(--gray-dark); }
+    .rubric-page { --score-title:clamp(31px,2.65vw,45px); }
+    .rubric-copy { margin-top:4vh; border-top:1px solid var(--line); }
+    .rubric-rule { display:grid; grid-template-columns:52px 1fr; gap:24px; padding:17px 0; border-bottom:1px solid var(--line); }
+    .rubric-rule > span { color:var(--blue); font:700 10px/1.6 var(--sans); letter-spacing:.1em; }
+    .rubric-rule p,.rubric-rule blockquote { margin:0; color:#34353a; font-size:13px; line-height:1.7; }
+    .rubric-rule.major { padding:24px 0; }
+    .rubric-rule.major p { color:var(--ink); font:500 19px/1.55 var(--serif); }
+    .rubric-aside { margin:18px 0 0 76px; color:var(--blue); font:500 18px/1.5 var(--serif); }
+    .standard-layout { display:grid; grid-template-columns:1.1fr .9fr; gap:6vw; margin-top:4vh; }
+    .standard-definition { border-top:1px solid var(--line); }
+    .standard-definition p,.standard-definition li { color:#34353a; font-size:12.5px; line-height:1.68; }
+    .standard-definition p { margin:0; padding:15px 0; border-bottom:1px solid var(--line); }
+    .standard-definition ul { margin:0; padding:10px 0 10px 18px; columns:2; column-gap:30px; }
+    .standard-definition li { margin:0 0 8px; break-inside:avoid; }
+    .sample-return { padding-top:18px; border-top:2px solid var(--blue); }
+    .sample-return small { color:var(--blue); font-size:10px; font-weight:800; letter-spacing:.12em; }
+    .sample-return h3 { margin:12px 0; font:500 25px/1.2 var(--serif); }
+    .sample-return p { margin:0; color:var(--gray-dark); font-size:13px; line-height:1.72; }
+    .rubric-choice { display:block; width:100%; padding:14px 0; border:0; border-top:1px solid var(--line); color:var(--ink); background:transparent; text-align:left; font:500 16px/1.45 var(--serif); cursor:pointer; }
+    .rubric-choice:last-of-type { border-bottom:1px solid var(--line); }
+    .rubric-choice[aria-pressed="true"] { color:var(--blue); }
+    .rubric-reveal { margin-top:16px; color:var(--gray-dark); font-size:12.5px; line-height:1.7; }
+    .rubric-reveal[hidden] { display:none; }
+    .admission-grid { display:grid; grid-template-columns:1fr 1fr; gap:6vw; margin-top:4vh; }
+    .admission-column { border-top:1px solid var(--line); }
+    .admission-column h3 { margin:16px 0; color:var(--blue); font:500 23px/1.25 var(--serif); }
+    .admission-column ul { margin:0; padding:0; list-style:none; }
+    .admission-column li { padding:8px 0; border-top:1px solid var(--line); color:var(--gray-dark); font-size:12.5px; line-height:1.55; }
+    .admission-column li.focus { color:var(--ink); font-weight:700; }
+    .placement-grid { display:grid; grid-template-columns:1fr .82fr; gap:7vw; margin-top:4vh; }
+    .placement-levels { border-top:1px solid var(--line); }
+    .placement-level { display:grid; grid-template-columns:110px 1fr; gap:18px; padding:10px 0; border-bottom:1px solid var(--line); font-size:12.5px; line-height:1.5; }
+    .placement-level strong { font-weight:700; }
+    .placement-level.active { color:var(--blue); }
+    .placement-result { padding-top:18px; border-top:2px solid var(--blue); }
+    .placement-result strong { display:block; font:500 58px/.9 var(--serif); color:var(--blue); }
+    .placement-result span { display:block; margin-top:18px; font:500 26px/1.2 var(--serif); }
+    .placement-result p { margin:22px 0 0; color:var(--gray-dark); font-size:12.5px; line-height:1.7; }
+    .method-steps { display:grid; grid-template-columns:repeat(4,1fr); gap:0; margin-top:5vh; border-top:1px solid var(--line); border-bottom:1px solid var(--line); }
+    .method-step { min-height:210px; padding:22px 20px 20px 0; border-right:1px solid var(--line); }
+    .method-step + .method-step { padding-left:20px; }
+    .method-step:last-child { border-right:0; }
+    .method-step small { color:var(--blue); font-size:10px; font-weight:800; letter-spacing:.1em; }
+    .method-step p { margin:18px 0 0; font:500 17px/1.55 var(--serif); }
+    .method-proof { margin:24px 0 0; color:var(--gray-dark); font-size:13px; line-height:1.7; }
+
+    @media (min-width:901px) and (min-height:760px) {
+      .scoring-page { height:100svh; min-height:760px; padding:clamp(38px,5vh,58px) 0 28px; overflow:hidden; scroll-snap-align:start; }
+      .scoring-page .scoring-inner { height:100%; }
+    }
+
+    @media (max-width: 900px) {
+      html { scroll-snap-type: y proximity; }
+      .cover-header { left: 22px; right: 22px; }
+      .quote-layout { left: 6vw; right: 6vw; top: 8%; }
+      .quote-block { font-size: clamp(48px, 10.5vw, 82px); white-space: normal; line-height: .95; }
+      .quote-tail { font-size: .42em; }
+      .prompt-row, .prompt-cn { grid-template-columns: 1fr; gap: 14px; }
+      .prompt-row { margin-top: 30px; font-size: clamp(22px, 5vw, 34px); }
+      .prompt-cn { display: none; }
+      .credit { display: none; }
+      .concept-word { font-size: clamp(74px, 20vw, 132px); }
+      .concept-word + .concept-word { margin-top: 70px; }
+      .chapter-title { padding: 0 6vw; }
+      .chapter-title h2 { font-size: clamp(64px, 16vw, 112px); }
+      .chapter-title .line-2 { white-space: normal; }
+      .story-scrolly { display: block; }
+      .story-graphic { position: sticky; height: 100svh; }
+      .story-graphic::after { background: linear-gradient(0deg, rgb(255 255 255 / 35%), transparent 55%); }
+      .story-steps { position: relative; z-index: 4; margin-top: -100svh; padding: 32vh 7vw 30vh; }
+      .story-step { min-height: 112svh; opacity: .1; }
+      .story-step p {
+        padding: 22px 20px;
+        color: #222;
+        background: rgb(255 255 255 / 92%);
+        box-shadow: 0 18px 50px rgb(0 0 0 / 12%);
+        font-size: clamp(17px, 4.35vw, 21px);
+        line-height: 1.58;
+        backdrop-filter: blur(10px);
+      }
+      .story-step-index { left: 6px; top: calc(50% - 5.8em); color: var(--blue); }
+      .story-counter { left: 7vw; bottom: 5vh; }
+      .prompt-page { padding: 9vh 7vw; }
+      .prompt-line { font-size: clamp(25px, 6.8vw, 38px); }
+      .judgement-page { padding: 10vh 7vw; }
+      .judgement-inner { width: 100%; }
+      .judgement-title { font-size: clamp(34px, 8vw, 54px); }
+      .judgement-option { grid-template-columns: 34px 1fr; gap: 14px; min-height: 76px; }
+      .analysis-page { padding: 10vh 7vw; }
+      .analysis-inner { width: 100%; }
+      .analysis-options { grid-template-columns: 1fr; }
+      .analysis-option, .analysis-option:nth-child(even) { border-right: 0; padding-left: 4px; }
+      .prerequisite-groups { grid-template-columns: 1fr; }
+      .timeline-classification { grid-template-columns: 1fr; }
+      .timeline-track { grid-row: auto; grid-template-columns: 1fr; }
+      .timeline-node:not(:last-child)::after { top: auto; right: 50%; bottom: -5px; width: 1px; height: 10px; transform: scaleY(0); animation: lineGrowY 520ms ease forwards; }
+      @keyframes lineGrowY { to { transform: scaleY(1); } }
+      .apology-formula { grid-template-columns: 1fr; gap: 10px; }
+      .apology-formula .classification-item:not(:last-child)::after { left: 50%; top: 100%; width: 1px; height: 11px; }
+      .theme-axis { grid-template-columns: 1fr 55px 1fr; }
+      .theme-tags { flex-wrap: wrap; }
+      .mind-classification .classification-item:nth-child(2) { transform: translateX(7px); }
+      .mind-classification .classification-item:nth-child(3) { transform: translateX(14px); }
+      .scoring-page{min-height:100svh;height:auto;padding:10vh 7vw;overflow:visible}.scoring-inner{width:100%}.sample-sheet,.fact-layout,.language-balance,.score-band-stage,.judgement-reader,.theme-comparison,.standard-layout,.admission-grid,.placement-grid,.method-steps{grid-template-columns:1fr}.sample-column,.sample-column + .sample-column{padding:22px 0;border-left:0}.sample-column + .sample-column{border-top:1px solid var(--line)}.sample-body{font-size:15px}.essayflow-arrival{grid-template-columns:1fr}.arrival-arrow{padding:20px 0;transform:rotate(90deg)}.scoring-questions li{grid-template-columns:48px 1fr}.score-judgement{grid-template-columns:45px 1fr}.score-judgement-copy{grid-column:2}.fact-explanation{grid-template-columns:1fr}.fact-connector{padding:14px 0;transform:rotate(90deg)}.score-band-stage{text-align:center}.score-band-result{margin-top:30px}.judgement-index{border-right:0;border-bottom:1px solid var(--line)}.judgement-detail{min-height:0}.theme-shift{transform:rotate(90deg)}.language-issue-list li{grid-template-columns:1fr}.rubric-aside{margin-left:0}.standard-definition ul{columns:1}.method-step{min-height:0;border-right:0;border-bottom:1px solid var(--line);padding:18px 0}.method-step + .method-step{padding-left:0}
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      html { scroll-behavior: auto; }
+      *, *::before, *::after { animation: none !important; transition-duration: .01ms !important; }
+    }
+  </style>
+</head>
+<body>
+  <div class="progress" aria-hidden="true"><span id="progressBar"></span></div>
+
+  <main>
+    <section class="screen is-visible" id="page-1">
+      <header class="cover-header reveal">
+        <div>EssayFlow</div>
+        <a href="#page-5">阅读案例</a>
+      </header>
+
+      <div class="quote-layout">
+        <div class="quote-block reveal">
+          <span class="quote-line float-title-line">“The king died <span class="muted">and then</span></span>
+          <span class="quote-line float-title-line">the queen died” <span class="quote-tail">is a story</span></span>
+          <p class="quote-cn">“国王死了，然后王后也死了”，这是故事</p>
+        </div>
+
+        <div class="quote-block reveal delay-1">
+          <span class="quote-line float-title-line">“The king died, <span class="muted">and then</span></span>
+          <span class="quote-line float-title-line">the queen died <span class="blue float-word" tabindex="0">of grief</span>” <span class="quote-tail">is a plot</span></span>
+          <p class="quote-cn">“国王死了，然后王后<span class="blue">因悲伤而死</span>”，这是情节</p>
+        </div>
+
+        <div class="prompt-row reveal delay-2">
+          <div>If it is in a story we say <span class="muted float-word" tabindex="0">“and then?”</span></div>
+          <div>If it is in a plot we ask <span class="blue float-word" tabindex="0">“why?”</span></div>
+        </div>
+        <div class="prompt-cn reveal delay-2">
+          <div>读故事，我们问“然后呢”</div>
+          <div>读情节，我们问“为什么”</div>
+        </div>
+      </div>
+
+      <div class="credit reveal delay-3">E. M. Forster, 《小说面面观》 <em>(Aspects of the Novel, 1927)</em></div>
+      <button class="down" aria-label="下一页" data-next="page-2">↓</button>
+    </section>
+
+    <section class="concept-stage" id="page-2">
+      <div class="screen concept" id="conceptScreen">
+        <div class="concept-inner">
+          <p class="concept-kicker reveal">从事件，进入人物</p>
+          <h2 class="concept-word then reveal delay-1" id="thenWord"><span class="strike float-word" tabindex="0">and then?</span></h2>
+          <h2 class="concept-word why reveal delay-2" id="whyWord"><span class="float-word" tabindex="0">why?</span></h2>
+          <p class="concept-copy reveal delay-3" id="conceptCopy">好的续写不只把故事推向下一件事<br>它让我们看见人物为何行动，以及行动之后发生了什么变化</p>
+        </div>
+        <button class="down" id="conceptNext" aria-label="下一页" data-next="page-4">↓</button>
+      </div>
+    </section>
+
+    <section class="screen chapter-title" id="page-4">
+      <h2 class="reveal">我们先看看<span class="line-2">2025 年全国一卷的故事</span></h2>
+      <button class="down" aria-label="下一页" data-next="page-5">↓</button>
+    </section>
+
+    <section class="story-scrolly" id="page-5">
+      <div class="story-graphic" aria-hidden="true">
+        <img class="story-image active" src="assets/scene-01-gathering.jpg" alt="">
+        <img class="story-image" src="assets/scene-02-rain-square.png" alt="">
+        <img class="story-image" src="assets/scene-03-leaving-square.png" alt="">
+        <img class="story-image" src="assets/scene-04-companion.jpg" alt="">
+        <div class="scene-effect effect-run active" data-effect="0"><span></span><span></span><span></span></div>
+        <div class="scene-effect effect-distance" data-effect="2"><span></span></div>
+        <div class="scene-effect effect-companion" data-effect="3"><span></span></div>
+        <div class="story-counter"><span id="storyCounter">01</span><small>/ 04</small></div>
+      </div>
+
+      <div class="story-steps">
+        <article class="story-step active" data-scene="0">
+          <span class="story-step-index">01</span>
+          <p>My wife and I wanted to share our <strong>new home</strong> with family and friends by hosting a small gathering in the early summer. She had prepared lots of snacks, while my job was to have the backyard in order. There was plenty of space for the kids to run and play. There was just one thing I hadn't counted on: My brother chose to bring his dog <strong>Toby</strong>, a 50-pound ball of fire. Though friendly, he could easily knock over my niece's small boys and my six-month-old granddaughter. So, when my brother showed up, I asked him to watch Toby and keep him outside. My plan was working out just fine. Toby was using up his energy by running back and forth in the backyard and giving the kids plenty of room.</p>
+        </article>
+
+        <article class="story-step" data-scene="1">
+          <span class="story-step-index">02</span>
+          <p>Unexpectedly, after supper, the weather changed. <strong>It started to rain and everyone went indoors.</strong> It was an awkward moment. I didn't want Toby to be running around in the house, and my brother wasn't happy with driving home with a wet dog. Eventually, my brother decided to <strong>leave rather than force the issue.</strong></p>
+        </article>
+
+        <article class="story-step" data-scene="2">
+          <span class="story-step-index">03</span>
+          <p>A few days passed, and I hadn't heard anything from my brother. I texted him and expressed wishes for him to come out again. His reply came as a surprise—a shock, actually: <strong>"Not a chance."</strong> Clearly, he was unhappy over the way we had parted. After all, I had left him little choice. Well, he'll get over it, I reasoned.</p>
+        </article>
+
+        <article class="story-step" data-scene="3">
+          <span class="story-step-index">04</span>
+          <p><strong>Two months passed.</strong> My wife suggested I get in touch with my brother, but I resisted, thinking he should call first. However, my conscience（良心）kept bothering me. I tried to put myself <strong>in my brother's shoes.</strong> He was facing health issues and his wife of thirty-five years had passed away a few months earlier. Toby was his constant companion, <strong>the one who kept him going.</strong></p>
+        </article>
+      </div>
+    </section>
+
+    <div class="analysis-module" id="analysisModule"></div>
+
+  </main>
+
+  <script src="vendor/lenis.min.js"></script>
+  <script src="vendor/scrollama.min.js"></script>
+  <script src="vendor/split-type.min.js"></script>
+  <script src="content-data.js"></script>
+  <script>
+    const analysisModule = document.getElementById('analysisModule');
+    analysisModule.innerHTML = `
+      <section class="screen analysis-page essay-page stage-one" id="page-8" data-stage-one>
+        <div class="analysis-inner">
+          <p class="stage-one-note reveal">注意：<br>（1）续写词数应为 150 个左右；<br>（2）请按如下格式在答题卡的相应位置作答。</p>
+          <article class="reading-pause" data-reading-pause>
+            <p class="reading-pause-label">续写第一段首句</p>
+            <p class="reading-sentence">I realized it was me who was <strong>at fault</strong>.</p>
+            <div class="reading-prompt"><h2>等等……我错哪了？？</h2><p>如果我是弟弟，我真正忽略了什么？</p></div>
+            <div class="reading-interaction">
+              <div class="editorial-fragments">
+                <p class="fragment-label">我的第一反应</p>
+                <button class="editorial-fragment" type="button" aria-pressed="false" data-feedback="原文没有否定保护孩子的合理性。真正缺失的，不是风险判断，而是对哥哥处境的理解。">我忽略了 Toby 可能带来的安全问题</button>
+                <button class="editorial-fragment" type="button" aria-pressed="false" data-feedback="弟弟只判断了 Toby，却没有看见哥哥为什么离不开他。">我忽略了哥哥为什么需要 Toby</button>
+                <button class="editorial-fragment" type="button" aria-pressed="false" data-feedback="生气是冲突的结果，还不是主人公需要完成的认知变化。">我忽略了哥哥已经生气</button>
+                <button class="editorial-fragment" type="button" aria-pressed="false" data-feedback="早点行动并不等于真正理解。道歉必须建立在看见哥哥之后。">我忽略了应该早点道歉</button>
+              </div>
+              <aside class="mini-annotation relation-stage" aria-live="polite"><span class="annotation-label">EssayFlow 提醒</span><p class="annotation-copy">点击一句阅读判断，看看它还缺少什么。</p><div class="mini-relation"><span class="mini-left">弟弟</span><i class="line-left"></i><span class="mini-center">哥哥</span><i class="line-right"></i><span class="mini-right">Toby</span></div></aside>
+            </div>
+            <p class="editorial-note">真正的问题不是“规则错了”，而是：<strong>我没有看见哥哥的处境。</strong></p>
+          </article>
+
+          <article class="reading-pause" data-reading-pause>
+            <p class="reading-pause-label">第二段首句成立之前，第一段必须完成什么？</p>
+            <p class="reading-sentence">With the biscuits my wife had made, I arrived at my brother's door.</p>
+            <div class="reading-prompt"><h2>带着饼干去道歉，真的够了吗？</h2><p>第二段已经规定了行动，但行动能否替代理解？</p></div>
+            <div class="reading-interaction">
+              <div class="editorial-fragments">
+                <p class="fragment-label">我的第一反应</p>
+                <button class="editorial-fragment" type="button" aria-pressed="false" data-feedback="饼干能够表达善意，却不能自动说明主人公已经理解了什么。">能，饼干代表我的诚意</button>
+                <button class="editorial-fragment" type="button" aria-pressed="false" data-feedback="亲情不能自动消除两个月的沉默，也不能替人物完成认知改变。">能，一家人没有隔夜仇</button>
+                <button class="editorial-fragment" type="button" aria-pressed="false" data-feedback="饼干传递歉意，理解才让关系可能被修复。">不能，饼干只是表达歉意，真正重要的是理解哥哥的处境</button>
+                <button class="editorial-fragment" type="button" aria-pressed="false" data-feedback="证明 Toby 是否危险，仍然会把故事拉回规则，而不是人物需要补上的共情。">不能，我还需要证明 Toby 没有危险</button>
+              </div>
+              <aside class="mini-annotation biscuit-bridge" aria-live="polite"><span class="annotation-label">EssayFlow 提醒</span><p class="annotation-copy">点击一句理解方向，让行动和认知重新连接。</p><div class="concept-equation"><span>饼干表达歉意</span><strong>理解哥哥，才可能修复关系</strong></div></aside>
+            </div>
+            <p class="editorial-note"><strong>饼干是一种行动，但行动不能替代理解。</strong><br>第二段真正延续的，不只是事件，而是人物认知的变化。</p>
+          </article>
+          <button class="module-next stage-one-next" type="button" data-next="page-11" hidden aria-label="继续进入原文解析">↓</button>
+        </div>
+      </section>
+
+      <section class="screen analysis-page essay-page editorial-page" id="page-11" data-chain-page data-chain-step="0">
+        <div class="analysis-inner">
+          <header class="essay-head reveal"><p><span class="essay-number">03</span><span class="essay-recognition">EssayFlow 正在识别：冲突如何形成</span></p><h2 class="essay-question">那个雨夜，哪些事情把原本可以避免的矛盾推向了爆发？</h2></header>
+          <div class="conflict-layout">
+            <aside class="context-notes"><p class="context-note">背景：哥哥的妻子几个月前去世，Toby 是持续陪伴。</p><p class="context-note">结果：争执之后，兄弟两个月没有联系。</p></aside>
+            <div class="event-chain" aria-label="冲突事件链">
+              <button class="chain-node" type="button" aria-pressed="false">Toby 来访，原本待在后院</button>
+              <button class="chain-node" type="button" aria-pressed="false">暴雨出现</button>
+              <button class="chain-node" type="button" aria-pressed="false">室外安排无法继续</button>
+              <button class="chain-node" type="button" aria-pressed="false">拒绝进屋，冲突发生</button>
+            </div>
+            <div class="threshold-illustration rain-threshold"><span class="rain-zone-label outside">RAIN · 条件改变</span><svg class="threshold-field" viewBox="0 0 300 410" preserveAspectRatio="none" aria-hidden="true"><defs><clipPath id="rain-outside"><rect x="0" y="0" width="108" height="410"/></clipPath></defs><g class="rain-lines" clip-path="url(#rain-outside)"><line x1="18" y1="18" x2="5" y2="61"/><line x1="57" y1="-8" x2="40" y2="46"/><line x1="92" y1="26" x2="78" y2="72"/><line x1="126" y1="-18" x2="108" y2="42"/><line x1="42" y1="96" x2="26" y2="148"/><line x1="84" y1="78" x2="65" y2="140"/><line x1="122" y1="112" x2="108" y2="158"/><line x1="22" y1="174" x2="7" y2="224"/><line x1="67" y1="164" x2="48" y2="226"/><line x1="111" y1="188" x2="96" y2="238"/><line x1="39" y1="258" x2="22" y2="314"/><line x1="88" y1="250" x2="70" y2="310"/><line x1="126" y1="286" x2="112" y2="334"/><line x1="18" y1="344" x2="6" y2="384"/><line x1="65" y1="326" x2="48" y2="382"/><line x1="108" y1="350" x2="94" y2="396"/></g><path class="editorial-door" d="M108 342V104H218V342M94 342H232"/><circle class="door-knob" cx="200" cy="225" r="3"/></svg><p class="door-label">门把原本可回避的分歧，变成了必须立刻作出的选择。</p></div>
+          </div>
+          <p class="editorial-note">不是所有信息都承担同一种作用。<strong>暴雨让室外方案失效，门才成为规则与陪伴的冲突节点。</strong></p>
+          <button class="editorial-action" type="button" data-chain-reset>再看一次变化</button>
+          <button class="module-next" type="button" data-next="page-12" hidden aria-label="继续下一步">↓</button>
+        </div>
+      </section>
+
+      <section class="screen analysis-page essay-page editorial-page" id="page-12" data-perspective-page>
+        <div class="analysis-inner">
+          <header class="essay-head reveal"><p><span class="essay-number">04</span><span class="essay-recognition">EssayFlow 正在识别：人物视角</span></p><h2 class="essay-question">我为什么不让 Toby 进屋？</h2></header>
+          <div class="perspective-panel viewpoint-worlds">
+            <div class="perspective-side left"><small>弟弟看到</small><h3>规则保护的空间</h3><div class="perspective-term">孩子安全</div><div class="perspective-term">家庭规则</div><div class="perspective-term">家里的边界</div></div>
+            <div class="perspective-door"><button type="button" data-perspective-toggle aria-expanded="false">看见</button></div>
+            <div class="perspective-side right"><small>哥哥经历</small><h3>规则没有看见的人</h3><div class="perspective-term">妻子离世</div><div class="perspective-term">孤独</div><div class="perspective-term">Toby 的陪伴</div></div>
+          </div>
+          <p class="perspective-caption">同一个决定，不同的理解。</p>
+          <p class="editorial-note"><strong>理解不是立刻改变决定，而是终于看见理由之外的另一个人。</strong></p>
+          <button class="module-next" type="button" data-next="page-13" hidden aria-label="继续下一步">↓</button>
+        </div>
+      </section>
+
+      <section class="screen analysis-page essay-page editorial-page" id="page-13" data-repair-page>
+        <div class="analysis-inner">
+          <header class="essay-head reveal"><p><span class="essay-number">05</span><span class="essay-recognition">EssayFlow 正在识别：修复如何发生</span></p><h2 class="essay-question">除了饼干和一句“对不起”，什么才算真正的道歉？</h2></header>
+          <div class="repair-paths apology-layers">
+            <button class="repair-path" type="button" aria-pressed="false"><strong>一句“对不起”</strong><span>承认自己造成了伤害。</span></button>
+            <button class="repair-path" type="button" aria-pressed="false"><strong>一盒饼干</strong><span>主动靠近，不再等待对方先联系。</span></button>
+            <button class="repair-path" type="button" aria-pressed="false"><strong>理解哥哥为什么需要 Toby</strong><span>真正看见对方为什么受伤。</span></button>
+          </div>
+          <p class="editorial-note"><strong>道歉不仅是表达歉意，也是理解对方为什么受伤。</strong></p>
+          <button class="module-next" type="button" data-next="page-14" hidden aria-label="继续下一步">↓</button>
+        </div>
+      </section>
+
+      <section class="screen analysis-page essay-page editorial-page" id="page-14" data-theme-page>
+        <div class="analysis-inner">
+          <header class="essay-head reveal"><p><span class="essay-number">06</span><span class="essay-recognition">EssayFlow 正在识别：主题如何浮现</span></p><h2 class="essay-question">当雨夜、Toby 和饼干消失，这个故事剩下的是什么？</h2></header>
+          <div class="theme-fade abstraction-stage"><div class="theme-peel"><p><strong>雨夜</strong><span>只是冲突发生的条件。</span></p><p><strong>Toby</strong><span>不是冲突本身。</span></p><p><strong>饼干</strong><span>也不是修复本身。</span></p><p class="theme-remains">剩下的是，人物如何改变。</p></div><button class="editorial-action theme-trigger" type="button" data-theme-trigger aria-expanded="false">继续往故事里面看</button></div>
+          <p class="editorial-note"><strong>续写真正需要补充的，是人物认知的变化。</strong></p>
+          <button class="module-next" type="button" data-next="page-15" hidden aria-label="查看原文解析结论">↓</button>
+        </div>
+      </section>
+
+      <section class="screen analysis-page analysis-summary" id="page-15">
+        <div class="analysis-inner">
+          <p class="analysis-kicker reveal">原文解析完成</p>
+          <h2 class="analysis-question reveal delay-1" style="margin-left:auto;margin-right:auto">我们以为在读 Toby，<br>其实在重新看见一个人。</h2>
+          <ol class="summary-list reveal delay-2">
+            <li>我以为故事是关于 Toby，其实是关于哥哥和弟弟</li><li>我以为道歉是饼干，其实是理解</li><li>我以为规则已经足够合理，其实它仍可能遮住他人的需要</li>
+          </ol>
+          <p class="summary-pause reveal delay-2"><strong>此时，我们还没有开始读学生作文。</strong></p>
+          <p class="summary-pause reveal delay-3" style="font-size:clamp(25px,2.2vw,42px)">现在，才把这篇续写交给 EssayFlow。</p>
+        </div>
+      </section>
+
+      <section class="screen scoring-page" id="page-16">
+        <div class="scoring-inner">
+          <p class="scoring-kicker reveal">Real student continuation · 真实学生作文</p>
+          <h2 class="scoring-title reveal delay-1">先完整读完，再决定它写得怎么样。</h2>
+          <p class="scoring-lead sample-authentic reveal delay-2"><strong>作文按原样录入。</strong>其中的语法错误和不自然表达均未润色。</p>
+          <div class="sample-sheet reveal delay-2" id="sampleSheet"></div>
+          <p class="sample-note reveal delay-3">蓝色首句由题目给出，不可修改，不计入学生原创语言评价。</p>
+          <button class="scoring-next" type="button" data-next="page-17" aria-label="开始给作文评分">↓</button>
+        </div>
+      </section>
+
+      <section class="screen scoring-page score-ask" id="page-17" data-score-page>
+        <div class="scoring-inner">
+          <p class="scoring-kicker reveal">Your reading · 你的判断</p>
+          <h2 class="scoring-title reveal delay-1">怎么样？<br>试试给它打个分。</h2>
+          <div class="score-control reveal delay-2">
+            <output class="score-output" id="readerScore" for="scoreRange">18</output>
+            <input class="score-range" id="scoreRange" type="range" min="11" max="25" value="18" aria-label="你认为这篇续写可以得到多少分">
+            <div class="score-scale" aria-hidden="true"><span>11</span><span>16</span><span>20</span><span>25</span></div>
+            <button class="score-submit" type="button" data-score-submit>提交判断</button>
+            <p class="score-response" id="scoreResponse" hidden>你的判断已经记录。<br>接下来，我们看看 EssayFlow 如何评价它。</p>
+            <button class="scoring-next" type="button" data-next="page-18" hidden aria-label="继续查看 EssayFlow 判断">↓</button>
+          </div>
+        </div>
+      </section>
+
+      <section class="screen scoring-page" id="page-18">
+        <div class="scoring-inner">
+          <p class="scoring-kicker reveal">EssayFlow enters</p>
+          <h2 class="scoring-title reveal delay-1">接下来，我们再来用 EssayFlow 给它打个分。</h2>
+          <p class="scoring-lead reveal delay-2">但评分并不是简单看语言是否漂亮。EssayFlow 首先判断：这个故事有没有真正完成。</p>
+          <div class="essayflow-arrival reveal delay-3"><div class="arrival-side"><small>YOUR READING</small><strong>你的判断 <span id="readerScoreEcho">18</span></strong></div><div class="arrival-arrow">→</div><div class="arrival-side arrival-lock"><small>ESSAYFLOW</small><strong>评分依据</strong></div></div>
+          <button class="scoring-next" type="button" data-next="page-19" aria-label="继续查看评分起点">↓</button>
+        </div>
+      </section>
+
+      <section class="screen scoring-page" id="page-19">
+        <div class="scoring-inner">
+          <p class="scoring-kicker reveal">Where scoring begins</p>
+          <h2 class="scoring-title reveal delay-1">续写评分，看的不只是发生了什么。</h2>
+          <ol class="scoring-questions reveal delay-2"><li>冲突解决了吗？</li><li>人物理解变化了吗？</li><li>主题方向延续了吗？</li></ol>
+          <p class="scoring-lead reveal delay-3">这也是 EssayFlow 判断一篇续写的起点。</p>
+          <button class="scoring-next" type="button" data-next="page-20" aria-label="揭示 EssayFlow 分数">↓</button>
+        </div>
+      </section>
+
+      <section class="screen scoring-page score-reveal" id="page-20">
+        <div class="score-band-stage">
+          <div class="reveal">
+            <p class="scoring-kicker" style="color:rgb(255 255 255 / 65%)">EssayFlow judgement</p>
+            <h2 class="score-band-primary"><span id="essayflowBand">第四档 · 16—20</span></h2>
+          </div>
+          <div class="score-band-result reveal delay-1"><strong id="essayflowScore">18</strong><span id="essayflowPlacement">档内中位</span></div>
+          <p class="score-reveal-question reveal delay-2">它写得很好，为什么没有进入最高档？</p>
+          <button class="scoring-next" type="button" data-next="page-21" aria-label="查看四项内容判断" style="color:#fff">↓</button>
+        </div>
+      </section>
+
+      <section class="screen scoring-page" id="page-21">
+        <div class="scoring-inner">
+          <p class="scoring-kicker reveal">Four content judgements</p>
+          <h2 class="scoring-title reveal delay-1">四项内容判断，共同确定档位。</h2>
+          <div class="judgement-reader reveal delay-2"><nav class="judgement-index" id="judgementIndex" aria-label="四项内容判断"></nav><article class="judgement-detail" id="judgementDetail" aria-live="polite"></article></div>
+          <button class="scoring-next" type="button" data-next="page-22" aria-label="查看关键问题">↓</button>
+        </div>
+      </section>
+
+      <section class="screen scoring-page" id="page-22" data-theme-page-scoring>
+        <div class="scoring-inner">
+          <p class="scoring-kicker reveal">The final sentence</p>
+          <h2 class="scoring-title reveal delay-1">点明主题，就等于主题表达充分吗？</h2>
+          <div class="fact-layout reveal delay-2">
+            <blockquote class="fact-quote">its name was understanding, caring and true love between family members</blockquote>
+            <div class="fact-choices"><button class="fact-choice" type="button" aria-pressed="false" data-theme-judgement="beautiful">这个结尾点明了主题，收得漂亮。</button><button class="fact-choice" type="button" aria-pressed="false" data-theme-judgement="shallow">这个结尾把主题写浅了。</button></div>
+            <div class="theme-comparison" id="themeComparison" hidden aria-live="polite"><div class="theme-passage"><small>P1 已经看见</small><blockquote>it was Toby who had played the missing role of family members when my brother suffered the loss of his wife and his own health</blockquote></div><div class="theme-shift">→</div><div class="theme-passage"><small>结尾改成</small><blockquote>understanding, caring and true love between family members</blockquote></div><p class="theme-reading" id="themeReading">P1 的认知对象是具体的弟弟和 Toby；结尾却换成三个通用抽象名词。方向仍然积极，但具体认知被写浅了。</p></div>
+          </div>
+          <button class="scoring-next" type="button" data-next="page-23" hidden aria-label="继续查看语言判断">↓</button>
+        </div>
+      </section>
+
+      <section class="screen scoring-page" id="page-23">
+        <div class="scoring-inner">
+          <p class="scoring-kicker reveal">Language placement</p>
+          <h2 class="scoring-title reveal delay-1">内容定档之后，语言决定它落在哪里。</h2>
+          <div class="language-balance reveal delay-2"><div class="language-side"><small>档内位置</small><h3 id="languagePlacement">档内中位</h3><p class="language-hard-stop" id="languageRationale"></p></div><div class="language-side"><small>真实语言问题</small><ul class="language-issue-list" id="languageIssueList"></ul></div></div>
+          <p class="language-conclusion reveal delay-3">不得通过错误数量直接选择位置。必须说明语言整体为何处于该位置。</p>
+          <button class="scoring-next" type="button" data-next="page-24" aria-label="进入我的作文">↓</button>
+        </div>
+      </section>
+
+      <section class="screen scoring-page scoring-closing" id="page-24">
+        <div class="scoring-inner">
+          <p class="scoring-kicker reveal">After the score</p>
+          <h2 class="scoring-title reveal delay-1">18 分已经出现。<br>现在解释它是怎样形成的。</h2>
+          <p class="scoring-lead reveal delay-2" style="margin-left:auto;margin-right:auto">四项不是分别打分后相加，语言也不能把内容推入更高档位。</p>
+          <button class="scoring-next reveal delay-3" type="button" data-next="page-25" aria-label="继续理解评分理念">↓</button>
+        </div>
+      </section>
+
+      <section class="screen scoring-page rubric-page" id="page-25">
+        <div class="scoring-inner">
+          <p class="scoring-kicker reveal">Scoring framework · 评分框架</p>
+          <h2 class="scoring-title reveal delay-1">这四项，不是四个打分项。</h2>
+          <div class="rubric-copy reveal delay-2">
+            <div class="rubric-rule"><span>03</span><p>内容定档、语言定分：先根据“解决矛盾、文本衔接、主题表达、情节合理性”四项内容标准综合确定档位，再整体评价学生原创语言，在该档区间内确定具体分数。</p></div>
+            <div class="rubric-rule"><span>04</span><p>禁止五维相加：不得把四项内容和语言分别打 1—5 分后相加，不得输出任何会被理解为五项等权相加的分项总分。</p></div>
+            <div class="rubric-rule major"><span>07</span><p>四项不得互相抵扣：四项内容标准各自独立判定 status 后共同定档。任一项被判“明显问题”或“失败/硬伤”即触发第五档熔断，不得因其余项表现突出（含主题判定亮眼）而抵扣、折中或上调档位。不得先认定某一项为亮点，再以“有无严重到能推翻该亮点的问题”的方式审视其余三项。</p></div>
+            <div class="rubric-rule"><span>08</span><p>档内位置只受语言影响：档位由四项内容决定，档内高中低位置只由学生原创语言的整体表现决定。已在定档环节使用过的内容问题不得再用于压低档内位置，否则构成对同一问题的重复扣分。</p></div>
+          </div>
+          <p class="rubric-aside reveal delay-3">四项都没有硬伤，也可能进不了最高档。第五档是准入制，七条必须同时满足。</p>
+          <button class="scoring-next" type="button" data-next="page-26" aria-label="查看解决矛盾标准">↓</button>
+        </div>
+      </section>
+
+      <section class="screen scoring-page rubric-page" id="page-26">
+        <div class="scoring-inner">
+          <p class="scoring-kicker reveal">01 · 解决矛盾</p>
+          <h2 class="scoring-title reveal delay-1">原文清单是标尺，学生续写是被检验对象。</h2>
+          <div class="standard-layout reveal delay-2"><div class="standard-definition"><p>障碍覆盖清单强制（先于评判）：在判定本项 status 之前，必须先把原文提取出的每一处具体冲突、障碍、承诺、伏笔和道具逐条列入 obstacleCoverage，并对每条标注学生处理状态：复现并重组 / 仅复现未重组 / 未触及。必须按此清单核对，不得顺着学生行文阅读后直接给出整体印象——原文清单是标尺，学生续写是被检验对象。</p><p>另需区分“消除处境”与“解决矛盾”：若方案只是让人物脱离引发矛盾的处境，而原文的核心冲突并未被面对，即使叙述积极，也应计入回避一侧。判断标准是原文提出的问题有没有在续写中被真正处理，而非人物最终是否脱困。</p></div><article class="sample-return"><small>回到这篇稿子</small><h3 id="conflictStatus"></h3><p id="conflictJudgement"></p></article></div>
+          <button class="scoring-next" type="button" data-next="page-27" aria-label="查看文本衔接标准">↓</button>
+        </div>
+      </section>
+
+      <section class="screen scoring-page rubric-page" id="page-27" data-cohesion-page>
+        <div class="scoring-inner">
+          <p class="scoring-kicker reveal">02 · 文本衔接</p>
+          <h2 class="scoring-title reveal delay-1">P2 首句的前提，从哪里来？</h2>
+          <div class="standard-layout reveal delay-2"><div class="standard-definition"><p>第一步：拆解 P2 首句前提</p><ul><li>显性实体前提：新人物、物品、地点或特指对象；</li><li>隐性叙事前提：行为、情绪、承诺、状态变化、时间推进或因果所依赖的前置事实；</li><li>修饰语约束：定语从句、过去分词、所有格等对人物或物品来源、制作者、状态的限制。</li></ul><p>第二步：验证来源</p><ul><li>原文已明确建立：P1 无需重复，但不得与其矛盾；</li><li>原文未建立：必须由 P1 通过动作、对话、心理或叙述构建；</li><li>原文和 P1 均未建立：判为缺失必要前提。</li></ul></div><article class="sample-return"><small>先判断</small><h3>With the biscuits my wife had made</h3><button class="rubric-choice" type="button" aria-pressed="false" data-cohesion-check="repeat">P1 必须先出现 biscuits。</button><button class="rubric-choice" type="button" aria-pressed="false" data-cohesion-check="self-contained">首句已经交代来源，可以直接接上。</button><p class="rubric-reveal" id="cohesionReveal" hidden>自足引入型：P2 首句自带来源或限定，读者无需 P1 交代即可接上（例如首句内以定语从句、所有格说明了物品的来源或制作者）。此类不要求 P1 出现该名词，P1 只需不与其矛盾即可判合格。严禁因 P1 未字面复现该名词而判缺失。</p></article></div>
+          <button class="scoring-next" type="button" data-next="page-28" hidden aria-label="查看主题表达标准">↓</button>
+        </div>
+      </section>
+
+      <section class="screen scoring-page rubric-page" id="page-28">
+        <div class="scoring-inner">
+          <p class="scoring-kicker reveal">03 · 主题表达</p>
+          <h2 class="scoring-title reveal delay-1">积极、感人、温暖，不自动等于深化。</h2>
+          <div class="standard-layout reveal delay-2"><div class="standard-definition"><p>比较原文与续写时，必须同时检查：</p><ul><li>认知变化发生在谁身上；</li><li>人物最终理解、关注或重新看待的对象；</li><li>价值方向是否一致；</li><li>结尾认识是否由故事过程支撑；</li><li>是否只是配角说出正确道理，主人公并未体现；</li><li>是否用通用正能量替代原文更具体的主题。</li></ul><p>延续或深化：认知主体、关注对象和价值方向均与原文终点一致，并通过新行动或认识进一步发展。</p><p>主题替换或降格：用更通用、更表面的主题替代原文具体认知终点；或原文已从外部结果转向内在成长，续写又用获奖、金钱、输赢或他人认可证明价值。</p><p>积极、感人、温暖的结尾不自动等于主题深化。</p></div><article class="sample-return"><small>回到这篇稿子</small><h3 id="themeStatus"></h3><p id="themeJudgement"></p></article></div>
+          <button class="scoring-next" type="button" data-next="page-29" aria-label="查看情节合理性标准">↓</button>
+        </div>
+      </section>
+
+      <section class="screen scoring-page rubric-page" id="page-29">
+        <div class="scoring-inner">
+          <p class="scoring-kicker reveal">04 · 情节合理性</p>
+          <h2 class="scoring-title reveal delay-1">必须逐项比对原文事实与学生表达。</h2>
+          <div class="standard-layout reveal delay-2"><div class="standard-definition"><p>必须细读原文，检查：</p><ul><li>时间、地点和人物状态；</li><li>人物身份、关系、性格和动机；</li><li>人物已经知道或不知道的信息；</li><li>原文已经完成的事件；</li><li>原文明示的事实和故事规则；</li><li>关键行动与结果之间的因果；</li><li>新元素是否有铺垫；</li><li>人物转变是否有合理内在动因。</li></ul><p>必须逐项比对原文事实与学生表达。例如原文已给出名字，续写却说主人公刚知道名字；原文人物已经相识，续写却按陌生人处理；原文事件已经完成，续写却写成尚未发生，均属于事实矛盾。</p></div><article class="sample-return"><small>回到这篇稿子</small><h3 id="plausibilityStatus"></h3><p id="plausibilityJudgement"></p></article></div>
+          <button class="scoring-next" type="button" data-next="page-30" aria-label="查看第五档准入制">↓</button>
+        </div>
+      </section>
+
+      <section class="screen scoring-page rubric-page" id="page-30">
+        <div class="scoring-inner">
+          <p class="scoring-kicker reveal">Fifth band admission</p>
+          <h2 class="scoring-title reveal delay-1">第五档（21—25）准入制</h2>
+          <div class="admission-grid reveal delay-2"><section class="admission-column"><h3>必须同时满足</h3><ul><li>核心矛盾有效解决，必要障碍基本形成闭环；</li><li>原文到 P1、P1 到 P2、P2 到结尾衔接自然；</li><li>P2 所需关键前提已由原文或 P1 建立；</li><li>与原文明示事实、人物关系、已知信息和既成事件一致；</li><li>人物行为、转变与关键因果合理；</li><li class="focus">主题延续或深化原文具体认知终点；</li><li>主题得到情节、行动或心理变化支撑。</li></ul></section><section class="admission-column"><h3>以下任一情况触发熔断</h3><ul><li>四项内容中任何一项为“明显问题”或“失败/硬伤”；</li><li>关键衔接前提缺失；</li><li>与原文明示事实或人物已知信息直接矛盾；</li><li>人设崩坏或关键因果不成立；</li><li>主题中心转移、主题替换、主题降格、强行升华、主题冲突或认知倒退；</li><li>主要依赖无铺垫外部介入完成核心破局。</li></ul></section></div>
+          <p class="language-conclusion reveal delay-3">语言华丽、情感强烈、结尾积极或使用高级句式均不能豁免以上条件。四项中任何一项表现突出，同样不能豁免以上条件。</p>
+          <button class="scoring-next" type="button" data-next="page-31" aria-label="查看档内位置">↓</button>
+        </div>
+      </section>
+
+      <section class="screen scoring-page rubric-page" id="page-31">
+        <div class="scoring-inner">
+          <p class="scoring-kicker reveal">Language decides placement</p>
+          <h2 class="scoring-title reveal delay-1">档内位置只受语言影响。</h2>
+          <div class="placement-grid reveal delay-2"><div class="placement-levels"><div class="placement-level"><strong>档内最高位</strong><span>语言准确、自然、流畅且稳定，明显增强叙事；</span></div><div class="placement-level"><strong>档内较高位</strong><span>整体较好，少量不自然之处不影响阅读；</span></div><div class="placement-level active"><strong>档内中位</strong><span>意思清楚并能完成叙事，但表达较普通或稳定性一般；</span></div><div class="placement-level"><strong>档内较低位</strong><span>可以理解，但不自然、结构问题或表达断裂较明显；</span></div><div class="placement-level"><strong>档内最低位</strong><span>语言问题频繁影响阅读，但故事仍可辨认。</span></div></div><div class="placement-result"><strong>18</strong><span>第四档 · 档内中位</span><p id="placementRationale"></p><p>分数映射：第四档：20 / 19 / 18 / 17 / 16。</p></div></div>
+          <p class="language-conclusion reveal delay-3">不得通过错误数量直接选择位置。必须说明语言整体为何处于该位置。</p>
+          <button class="scoring-next" type="button" data-next="page-32" aria-label="查看四阶段评分方法">↓</button>
+        </div>
+      </section>
+
+      <section class="screen scoring-page rubric-page scoring-closing" id="page-32">
+        <div class="scoring-inner">
+          <p class="scoring-kicker reveal">Four-stage evaluation</p>
+          <h2 class="scoring-title reveal delay-1">先让原文说完，再开始评分。</h2>
+          <div class="method-steps reveal delay-2"><article class="method-step"><small>01</small><p>读原文，只列已成立的事实，不看学生续写。</p></article><article class="method-step"><small>02</small><p>读原文，提取五类线索和主题轨迹，仍然不看学生续写。</p></article><article class="method-step"><small>03</small><p>拿到学生续写，逐条核对第一步的事实清单。</p></article><article class="method-step"><small>04</small><p>四项定档、语言定分。</p></article></div>
+          <p class="method-proof reveal delay-3">同一个模型，一次调用同时读原文和学生续写时，会先看到结果再选择前提；把原文分析和学生分析拆开，是为了让原文先说完。</p>
+          <a class="scoring-cta reveal delay-3" href="essayflow-evaluate.html">测试我的续写 →</a>
+        </div>
+      </section>`;
+
+    const scoringData = window.ESSAYFLOW_CONTENT;
+    const { exam, sample, goodReport } = scoringData;
+    document.getElementById('sampleSheet').innerHTML = `
+      <article class="sample-column"><p class="sample-starter">${sample.starter1 || exam.starter1}</p><p class="sample-body">${sample.p1}</p></article>
+      <article class="sample-column"><p class="sample-starter">${sample.starter2 || exam.starter2}</p><p class="sample-body">${sample.p2}</p></article>`;
+
+    const judgements = goodReport.contentJudgements.map((item) => ({
+      ...item,
+      label: item.key === 'theme' ? '主题表达' : item.label,
+      evidence: Array.isArray(item.evidence) ? item.evidence : [item.evidence]
+    }));
+    const judgementIndex = document.getElementById('judgementIndex');
+    const judgementDetail = document.getElementById('judgementDetail');
+    const showJudgement = (index) => {
+      const item = judgements[index];
+      [...judgementIndex.querySelectorAll('.judgement-tab')].forEach((button, buttonIndex) => {
+        button.setAttribute('aria-pressed', String(buttonIndex === index));
+      });
+      judgementDetail.innerHTML = `<h3>${item.status}</h3><p>${item.judgement}</p><div class="judgement-evidence"><small>TEXT EVIDENCE</small>${item.evidence.map((evidence) => `<blockquote>“${evidence}”</blockquote>`).join('')}</div>`;
+    };
+    judgementIndex.innerHTML = judgements.map((item, index) => `<button class="judgement-tab${item.key === 'theme' ? ' limit' : ''}" type="button" aria-pressed="false" data-judgement-index="${index}"><small>0${index + 1}</small><strong>${item.label}</strong><span>${item.status}</span></button>`).join('');
+    judgementIndex.querySelectorAll('[data-judgement-index]').forEach((button) => button.addEventListener('click', () => showJudgement(Number(button.dataset.judgementIndex))));
+    showJudgement(2);
+
+    document.getElementById('essayflowScore').textContent = goodReport.total;
+    document.getElementById('essayflowBand').textContent = `${goodReport.level} · ${goodReport.bandRange}`;
+    document.getElementById('essayflowPlacement').textContent = goodReport.languagePlacement;
+    document.getElementById('languagePlacement').textContent = goodReport.languagePlacement;
+    document.getElementById('languageRationale').textContent = goodReport.languageRationale;
+    document.getElementById('languageIssueList').innerHTML = goodReport.issues.map((issue) => `<li><code>${issue.original}</code><span>${issue.problem}</span></li>`).join('');
+    document.getElementById('placementRationale').textContent = goodReport.languageRationale;
+
+    const judgementByKey = Object.fromEntries(judgements.map((item) => [item.key, item]));
+    document.getElementById('conflictStatus').textContent = judgementByKey.conflict.status;
+    document.getElementById('conflictJudgement').textContent = judgementByKey.conflict.judgement;
+    document.getElementById('themeStatus').textContent = judgementByKey.theme.status;
+    document.getElementById('themeJudgement').textContent = judgementByKey.theme.judgement;
+    document.getElementById('plausibilityStatus').textContent = judgementByKey.plausibility.status;
+    document.getElementById('plausibilityJudgement').textContent = judgementByKey.plausibility.judgement;
+
+    const scoreRange = document.getElementById('scoreRange');
+    const readerScore = document.getElementById('readerScore');
+    const readerScoreEcho = document.getElementById('readerScoreEcho');
+    const scorePage = document.querySelector('[data-score-page]');
+    const scoreSubmit = scorePage.querySelector('[data-score-submit]');
+    const scoreResponse = document.getElementById('scoreResponse');
+    const scoreNext = scorePage.querySelector('.scoring-next');
+    const updateReaderScore = () => {
+      const value = Number(scoreRange.value);
+      const progress = (value - Number(scoreRange.min)) / (Number(scoreRange.max) - Number(scoreRange.min)) * 100;
+      readerScore.textContent = value;
+      readerScoreEcho.textContent = value;
+      scoreRange.style.setProperty('--range-progress', `${progress}%`);
+    };
+    scoreRange.addEventListener('input', updateReaderScore);
+    scoreSubmit.addEventListener('click', () => {
+      updateReaderScore();
+      scoreSubmit.textContent = '判断已记录';
+      scoreSubmit.disabled = true;
+      scoreResponse.hidden = false;
+      scoreNext.hidden = false;
+    });
+    updateReaderScore();
+
+    const themeScoringPage = document.querySelector('[data-theme-page-scoring]');
+    const themeChoices = [...themeScoringPage.querySelectorAll('[data-theme-judgement]')];
+    const themeComparison = document.getElementById('themeComparison');
+    const themeReading = document.getElementById('themeReading');
+    const themeNext = themeScoringPage.querySelector('.scoring-next');
+    themeChoices.forEach((choice) => choice.addEventListener('click', () => {
+      themeChoices.forEach((item) => item.setAttribute('aria-pressed', String(item === choice)));
+      themeReading.textContent = choice.dataset.themeJudgement === 'shallow'
+        ? 'P1 的认知对象是具体的弟弟和 Toby；结尾却换成三个通用抽象名词。方向仍然积极，但具体认知被写浅了。'
+        : '这个结尾确实明确而积极；但与 P1 相比，它把具体的人与处境换成了通用抽象品质。点明主题不自动等于深化主题。';
+      themeComparison.hidden = false;
+      themeNext.hidden = false;
+    }));
+
+    const cohesionPage = document.querySelector('[data-cohesion-page]');
+    const cohesionChoices = [...cohesionPage.querySelectorAll('[data-cohesion-check]')];
+    const cohesionReveal = document.getElementById('cohesionReveal');
+    const cohesionNext = cohesionPage.querySelector('.scoring-next');
+    cohesionChoices.forEach((choice) => choice.addEventListener('click', () => {
+      cohesionChoices.forEach((item) => item.setAttribute('aria-pressed', String(item === choice)));
+      cohesionReveal.hidden = false;
+      cohesionNext.hidden = false;
+    }));
+
+    const screens = [...document.querySelectorAll('.screen')];
+    const progressBar = document.getElementById('progressBar');
+    const conceptStage = document.getElementById('page-2');
+    const conceptScreen = document.getElementById('conceptScreen');
+    const thenWord = document.getElementById('thenWord');
+    const whyWord = document.getElementById('whyWord');
+    const conceptCopy = document.getElementById('conceptCopy');
+    const storyImages = [...document.querySelectorAll('.story-image')];
+    const storySteps = [...document.querySelectorAll('.story-step')];
+    const storyEffects = [...document.querySelectorAll('.scene-effect')];
+    const storyGraphic = document.querySelector('.story-graphic');
+    const storyCounter = document.getElementById('storyCounter');
+
+    const lenis = new Lenis({
+      autoRaf: true,
+      anchors: true,
+      duration: 1.05,
+      smoothWheel: true
+    });
+
+    const splitTitle = new SplitType('.float-title-line', { types: 'words, chars' });
+    splitTitle.chars.forEach((char, index) => {
+      char.style.setProperty('--float-duration', `${3.7 + (index % 7) * .16}s`);
+      char.style.setProperty('--float-delay', `${-((index * .19) % 3.4)}s`);
+      char.style.setProperty('--float-y', `${1.2 + (index % 4) * .45}`);
+      char.style.setProperty('--float-r', `${((index % 5) - 2) * .08}`);
+    });
+
+    const observer = new IntersectionObserver((entries) => {
+      entries.forEach((entry) => {
+        if (entry.isIntersecting) entry.target.classList.add('is-visible');
+      });
+    }, { threshold: 0.55 });
+
+    const analysisObserver = new IntersectionObserver((entries) => {
+      entries.forEach((entry) => {
+        if (entry.isIntersecting) entry.target.classList.add('is-visible');
+      });
+    }, { threshold: 0.12 });
+
+    screens.forEach((screen) => {
+      if (screen.classList.contains('analysis-page')) analysisObserver.observe(screen);
+      else observer.observe(screen);
+    });
+
+    document.querySelectorAll('[data-next]').forEach((button) => {
+      button.addEventListener('click', () => {
+        document.getElementById(button.dataset.next)?.scrollIntoView({ behavior: 'smooth' });
+      });
+    });
+
+    const stageOne = document.querySelector('[data-stage-one]');
+    const readingPauses = [...stageOne.querySelectorAll('[data-reading-pause]')];
+    const stageOneNext = stageOne.querySelector('.module-next');
+
+    readingPauses.forEach((pause) => {
+      const fragments = [...pause.querySelectorAll('.editorial-fragment')];
+      const copy = pause.querySelector('.annotation-copy');
+      fragments.forEach((fragment) => fragment.addEventListener('click', () => {
+        fragments.forEach((item) => item.setAttribute('aria-pressed', String(item === fragment)));
+        copy.textContent = fragment.dataset.feedback;
+        pause.classList.add('is-resolved');
+        if (readingPauses.every((item) => item.classList.contains('is-resolved'))) stageOneNext.hidden = false;
+      }));
+    });
+
+    const chainPage = document.querySelector('[data-chain-page]');
+    const chain = chainPage.querySelector('.event-chain');
+    const chainNodes = [...chainPage.querySelectorAll('.chain-node')];
+    const chainNext = chainPage.querySelector('.module-next');
+    const rainStrengths = ['.04', '.38', '.66', '.86'];
+    chainPage.dataset.chainStep = '0';
+    chainPage.style.setProperty('--rain-strength', rainStrengths[0]);
+    chainNodes.forEach((node, index) => node.addEventListener('click', () => {
+      chainNodes.forEach((item, itemIndex) => item.setAttribute('aria-pressed', String(itemIndex <= index)));
+      chain.style.setProperty('--chain-height', `${index / (chainNodes.length - 1) * 100}%`);
+      chainPage.dataset.chainStep = String(index);
+      chainPage.style.setProperty('--rain-strength', rainStrengths[index]);
+      const complete = index === chainNodes.length - 1;
+      chainPage.classList.toggle('is-resolved', complete);
+      chainNext.hidden = !complete;
+    }));
+    chainPage.querySelector('[data-chain-reset]').addEventListener('click', () => {
+      chainNodes.forEach((node) => node.setAttribute('aria-pressed', 'false'));
+      chain.style.setProperty('--chain-height', '0%');
+      chainPage.dataset.chainStep = '0';
+      chainPage.style.setProperty('--rain-strength', rainStrengths[0]);
+      chainPage.classList.remove('is-resolved');
+      chainNext.hidden = true;
+      chainNodes[0].focus();
+    });
+
+    const perspectivePage = document.querySelector('[data-perspective-page]');
+    const perspectiveToggle = perspectivePage.querySelector('[data-perspective-toggle]');
+    perspectiveToggle.addEventListener('click', () => {
+      perspectivePage.classList.add('is-resolved');
+      perspectiveToggle.setAttribute('aria-expanded', 'true');
+      perspectiveToggle.textContent = '看见彼此';
+      perspectivePage.querySelector('.module-next').hidden = false;
+    });
+
+    const repairPage = document.querySelector('[data-repair-page]');
+    const repairPaths = [...repairPage.querySelectorAll('.repair-path')];
+    repairPaths.forEach((path) => path.addEventListener('click', () => {
+      path.setAttribute('aria-pressed', 'true');
+      if (repairPaths.every((item) => item.getAttribute('aria-pressed') === 'true')) {
+        repairPage.classList.add('is-resolved');
+        repairPage.querySelector('.module-next').hidden = false;
+      }
+    }));
+
+    const themePage = document.querySelector('[data-theme-page]');
+    const themeTrigger = themePage.querySelector('[data-theme-trigger]');
+    themeTrigger.addEventListener('click', () => {
+      themePage.classList.add('is-resolved');
+      themeTrigger.setAttribute('aria-expanded', 'true');
+      themeTrigger.hidden = true;
+      themePage.querySelector('.module-next').hidden = false;
+    });
+
+    const storyScroller = scrollama();
+    storyScroller
+      .setup({ step: '.story-step', offset: .55, progress: true, threshold: 4 })
+      .onStepEnter(({ index, element }) => {
+        const scene = Number(element.dataset.scene);
+        storyImages.forEach((image, imageIndex) => image.classList.toggle('active', imageIndex === scene));
+        storyEffects.forEach((effect) => effect.classList.toggle('active', Number(effect.dataset.effect) === scene));
+        storySteps.forEach((step, stepIndex) => step.classList.toggle('active', stepIndex === index));
+        storyCounter.textContent = String(scene + 1).padStart(2, '0');
+        storyGraphic.dataset.scene = scene;
+      })
+      .onStepProgress(({ element, progress }) => {
+        const scene = Number(element.dataset.scene);
+        const sceneSteps = storySteps.filter((step) => Number(step.dataset.scene) === scene);
+        const localIndex = sceneSteps.indexOf(element);
+        const sceneProgress = (localIndex + progress) / sceneSteps.length;
+        const image = storyImages[scene];
+        if (image) image.style.transform = `scale(${1 + sceneProgress * .018})`;
+        storyGraphic.style.setProperty('--scene-progress', sceneProgress);
+        storyGraphic.style.setProperty('--distance-scale', .2 + sceneProgress * .8);
+      });
+
+    function updateProgress() {
+      const total = document.documentElement.scrollHeight - innerHeight;
+      const value = total > 0 ? scrollY / total * 100 : 0;
+      progressBar.style.width = `${Math.max(0, Math.min(100, value))}%`;
+    }
+
+    function mixColor(from, to, amount) {
+      const start = from.match(/\w\w/g).map((value) => parseInt(value, 16));
+      const end = to.match(/\w\w/g).map((value) => parseInt(value, 16));
+      const channels = start.map((value, index) => Math.round(value + (end[index] - value) * amount));
+      return `rgb(${channels.join(',')})`;
+    }
+
+    function updateConcept() {
+      const travel = Math.max(1, conceptStage.offsetHeight - innerHeight);
+      const progress = Math.max(0, Math.min(1, -conceptStage.getBoundingClientRect().top / travel));
+      const eased = progress * progress * (3 - 2 * progress);
+
+      conceptScreen.style.setProperty('--concept-progress', eased);
+      thenWord.style.color = mixColor('#606064', '#e4e4e5', eased);
+      whyWord.style.color = mixColor('#d9dfff', '#1847ff', eased);
+      conceptCopy.style.color = mixColor('#c1c1c3', '#55565b', eased);
+      thenWord.style.opacity = `${1 - eased * .18}`;
+      whyWord.style.transform = `scale(${1 + eased * .025})`;
+    }
+
+    function updateOnScroll() {
+      updateProgress();
+      updateConcept();
+    }
+
+    addEventListener('scroll', updateOnScroll, { passive: true });
+    addEventListener('resize', () => {
+      updateConcept();
+      storyScroller.resize();
+    });
+    updateProgress();
+    updateConcept();
+    if (location.hash) {
+      const hashTarget = document.querySelector(location.hash);
+      hashTarget?.classList.add('is-visible');
+      const hashTargetY = hashTarget ? hashTarget.getBoundingClientRect().top + scrollY : 0;
+      setTimeout(() => lenis.scrollTo(hashTargetY, { immediate: true }), 80);
+    }
+  </script>
+</body>
+</html>

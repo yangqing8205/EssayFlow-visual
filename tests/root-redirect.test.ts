@@ -9,9 +9,9 @@ import LandingPage from "@/app/page";
 describe("scoring service root", () => {
   beforeEach(() => redirect.mockClear());
 
-  it("opens the blue-white evaluation page", () => {
+  it("opens the complete blue-white interactive essay", () => {
     LandingPage();
 
-    expect(redirect).toHaveBeenCalledWith("/essayflow-evaluate.html");
+    expect(redirect).toHaveBeenCalledWith("/essayflow-visual-prototype-v2.html");
   });
 });
