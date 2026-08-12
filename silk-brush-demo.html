@@ -1,0 +1,375 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Silk Brush Study</title>
+  <style>
+    * { box-sizing: border-box; }
+    html, body { width: 100%; height: 100%; margin: 0; overflow: hidden; }
+    body { background: #faf9f6; }
+    canvas { display: block; width: 100%; height: 100%; }
+  </style>
+</head>
+<body>
+  <canvas id="silk" aria-label="Generative silk-fibre canvas"></canvas>
+
+  <script>
+    /*
+     * SILK BRUSH TUNING PANEL
+     * Edit these values, refresh, and compare the accumulated texture.
+     * The renderer never draws a boid's previous-position trail; it only
+     * connects new samples to nearby historical samples with short strokes.
+     */
+    window.SILK_BRUSH_CONFIG = {
+      BOID_COUNT: 96,
+      ALIGNMENT_WEIGHT: 0.045,
+      COHESION_WEIGHT: 0.035,
+      SEPARATION_WEIGHT: 1.48,
+      NEIGHBOR_RADIUS: 31,
+      CONNECTIONS_PER_SAMPLE: 3,
+      BASE_ALPHA: 0.068,
+      LINE_WIDTH: 0.42,
+      JITTER: 1.35,
+      FADE_ALPHA: 0,
+
+      SAMPLE_POOL_SIZE: 8000,
+      SAMPLE_DISTANCE: 1.8,
+      SAMPLES_PER_EMIT: 3,
+      BRUSH_RADIUS: 21,
+      BOID_PERCEPTION_RADIUS: 35,
+      SEPARATION_RADIUS: 14,
+      MAX_SPEED: 0.56,
+      MAX_FORCE: 0.026,
+      WANDER_WEIGHT: 1.18,
+      WARMUP_STEPS: 1450,
+      BACKGROUND: [250, 249, 246],
+      BLUE: [36, 83, 255]
+    };
+
+    (() => {
+      const C = window.SILK_BRUSH_CONFIG;
+      const canvas = document.getElementById('silk');
+      const ctx = canvas.getContext('2d', { alpha: false, desynchronized: true });
+      const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
+      const TAU = Math.PI * 2;
+
+      let width = 0;
+      let height = 0;
+      let dpr = 1;
+      let boids = [];
+      let samples = [];
+      let sampleHead = 0;
+      let sampleSerial = 0;
+      let spatial = new Map();
+      let animationId = 0;
+      let frame = 0;
+      let running = true;
+
+      const clampMagnitude = (x, y, max) => {
+        const m2 = x * x + y * y;
+        if (m2 <= max * max || m2 === 0) return [x, y];
+        const scale = max / Math.sqrt(m2);
+        return [x * scale, y * scale];
+      };
+
+      const fract = n => n - Math.floor(n);
+      const hash = (x, y, seed = 0) => fract(Math.sin(x * 127.1 + y * 311.7 + seed * 74.7) * 43758.5453123);
+      const smooth = t => t * t * (3 - 2 * t);
+      const valueNoise = (x, y, seed = 0) => {
+        const ix = Math.floor(x), iy = Math.floor(y);
+        const fx = smooth(x - ix), fy = smooth(y - iy);
+        const a = hash(ix, iy, seed), b = hash(ix + 1, iy, seed);
+        const c = hash(ix, iy + 1, seed), d = hash(ix + 1, iy + 1, seed);
+        return (a + (b - a) * fx) + ((c + (d - c) * fx) - (a + (b - a) * fx)) * fy;
+      };
+
+      const keyFor = (x, y) => `${Math.floor(x / C.NEIGHBOR_RADIUS)},${Math.floor(y / C.NEIGHBOR_RADIUS)}`;
+      const removeFromSpatial = sample => {
+        if (!sample) return;
+        const bucket = spatial.get(sample.key);
+        if (!bucket) return;
+        const index = bucket.indexOf(sample);
+        if (index !== -1) bucket.splice(index, 1);
+        if (!bucket.length) spatial.delete(sample.key);
+      };
+
+      const storeSample = sample => {
+        sample.key = keyFor(sample.x, sample.y);
+        if (samples.length < C.SAMPLE_POOL_SIZE) {
+          samples.push(sample);
+        } else {
+          removeFromSpatial(samples[sampleHead]);
+          samples[sampleHead] = sample;
+          sampleHead = (sampleHead + 1) % C.SAMPLE_POOL_SIZE;
+        }
+        const bucket = spatial.get(sample.key) || [];
+        bucket.push(sample);
+        spatial.set(sample.key, bucket);
+      };
+
+      const nearbySamples = (x, y, owner) => {
+        const cx = Math.floor(x / C.NEIGHBOR_RADIUS);
+        const cy = Math.floor(y / C.NEIGHBOR_RADIUS);
+        const radius2 = C.NEIGHBOR_RADIUS * C.NEIGHBOR_RADIUS;
+        const found = [];
+
+        for (let oy = -1; oy <= 1; oy++) {
+          for (let ox = -1; ox <= 1; ox++) {
+            const bucket = spatial.get(`${cx + ox},${cy + oy}`);
+            if (!bucket) continue;
+            for (const sample of bucket) {
+              if (sample.owner === owner) continue;
+              const dx = sample.x - x;
+              const dy = sample.y - y;
+              const distance2 = dx * dx + dy * dy;
+              if (distance2 > 16 && distance2 < radius2) found.push({ sample, distance2, dx, dy });
+            }
+          }
+        }
+        return found;
+      };
+
+      const drawConnection = (source, target, connectionIndex, localCount) => {
+        const ageSeed = source.serial * 0.013 + connectionIndex * 3.71;
+        const frequency = 0.018;
+        const n1 = valueNoise(source.x * frequency, source.y * frequency, ageSeed) - 0.5;
+        const n2 = valueNoise(target.x * frequency, target.y * frequency, ageSeed + 11) - 0.5;
+        const angle1 = valueNoise(source.x * 0.007, source.y * 0.007, source.owner) * TAU;
+        const angle2 = valueNoise(target.x * 0.007, target.y * 0.007, target.owner + 19) * TAU;
+        const j1 = C.JITTER * (0.45 + Math.abs(n1));
+        const j2 = C.JITTER * (0.45 + Math.abs(n2));
+        const x1 = source.x + Math.cos(angle1) * j1;
+        const y1 = source.y + Math.sin(angle1) * j1;
+        const x2 = target.x + Math.cos(angle2) * j2;
+        const y2 = target.y + Math.sin(angle2) * j2;
+
+        const distance = Math.hypot(x2 - x1, y2 - y1);
+        const distanceFactor = 1 - Math.min(1, distance / C.NEIGHBOR_RADIUS) * 0.34;
+        const variation = 0.62 + hash(source.serial, target.serial, connectionIndex) * 0.62;
+        const densityRestraint = localCount > 22 ? 0.84 : 1;
+        const alpha = C.BASE_ALPHA * distanceFactor * variation * densityRestraint;
+
+        ctx.beginPath();
+        ctx.moveTo(x1, y1);
+        ctx.lineTo(x2, y2);
+        ctx.strokeStyle = `rgba(${C.BLUE[0]}, ${C.BLUE[1]}, ${C.BLUE[2]}, ${alpha})`;
+        ctx.lineWidth = C.LINE_WIDTH * (0.88 + hash(target.serial, source.serial, 7) * 0.24);
+        ctx.stroke();
+      };
+
+      const emitBrushPoint = (boid, bristle) => {
+        // The boid is only a moving brush handle. Its bristles sample a soft,
+        // noise-shaped area around it, preventing the sample pool from tracing
+        // the centre path as a recognisable tube.
+        const brushNoiseX = boid.x * 0.012 + bristle * 8.7;
+        const brushNoiseY = boid.y * 0.012 + frame * 0.002;
+        const brushAngle = valueNoise(brushNoiseX, brushNoiseY, boid.noiseSeed + bristle * 17) * TAU * 3;
+        const brushRadius = C.BRUSH_RADIUS * (
+          0.18 + valueNoise(brushNoiseX + 31, brushNoiseY - 19, boid.noiseSeed + 43) * 0.82
+        );
+        const sample = {
+          x: boid.x + Math.cos(brushAngle) * brushRadius,
+          y: boid.y + Math.sin(brushAngle) * brushRadius,
+          owner: boid.id,
+          serial: sampleSerial++
+        };
+        if (sample.x < 0 || sample.x >= width || sample.y < 0 || sample.y >= height) return;
+        const edgeDistance = Math.min(sample.x, width - sample.x, sample.y, height - sample.y);
+        if (edgeDistance < 30 && hash(sample.serial, boid.id, 81) > edgeDistance / 30) return;
+        const candidates = nearbySamples(sample.x, sample.y, boid.id);
+
+        if (candidates.length) {
+          // Bias toward nearby fibres, then use a seeded shuffle so connections
+          // stay varied instead of forming a single dominant direction.
+          candidates.sort((a, b) => {
+            const da = a.distance2 * (0.76 + hash(a.sample.serial, sample.serial, 2) * 0.56);
+            const db = b.distance2 * (0.76 + hash(b.sample.serial, sample.serial, 2) * 0.56);
+            return da - db;
+          });
+          const desired = Math.min(
+            candidates.length,
+            Math.max(2, C.CONNECTIONS_PER_SAMPLE - 1 + Math.floor(hash(sample.serial, boid.id, 9) * 3))
+          );
+          const shortlist = candidates.slice(0, Math.min(18, candidates.length));
+          const selected = [];
+          while (shortlist.length && selected.length < desired) {
+            const pick = Math.floor(hash(sample.serial, selected.length, boid.id) * shortlist.length);
+            selected.push(shortlist.splice(pick, 1)[0]);
+          }
+          selected.forEach((candidate, index) => drawConnection(sample, candidate.sample, index, candidates.length));
+        }
+
+        storeSample(sample);
+      };
+
+      const emitSample = boid => {
+        for (let bristle = 0; bristle < C.SAMPLES_PER_EMIT; bristle++) emitBrushPoint(boid, bristle);
+        boid.lastSampleX = boid.x;
+        boid.lastSampleY = boid.y;
+      };
+
+      const createBoids = () => {
+        boids = Array.from({ length: C.BOID_COUNT }, (_, id) => {
+          const angle = Math.random() * TAU;
+          const speed = C.MAX_SPEED * (0.46 + Math.random() * 0.42);
+          return {
+            id,
+            x: Math.random() * width,
+            y: Math.random() * height,
+            vx: Math.cos(angle) * speed,
+            vy: Math.sin(angle) * speed,
+            ax: 0,
+            ay: 0,
+            lastSampleX: NaN,
+            lastSampleY: NaN,
+            noiseSeed: Math.random() * 999
+          };
+        });
+      };
+
+      const updateBoids = () => {
+        const perception2 = C.BOID_PERCEPTION_RADIUS ** 2;
+        const separation2 = C.SEPARATION_RADIUS ** 2;
+
+        for (const boid of boids) {
+          let alignX = 0, alignY = 0;
+          let cohesionX = 0, cohesionY = 0;
+          let separateX = 0, separateY = 0;
+          let neighborCount = 0, separationCount = 0;
+
+          for (const other of boids) {
+            if (other === boid) continue;
+            const dx = other.x - boid.x;
+            const dy = other.y - boid.y;
+            const distance2 = dx * dx + dy * dy;
+            if (distance2 < perception2) {
+              alignX += other.vx;
+              alignY += other.vy;
+              cohesionX += other.x;
+              cohesionY += other.y;
+              neighborCount++;
+            }
+            if (distance2 > 0.01 && distance2 < separation2) {
+              const inverse = 1 / distance2;
+              separateX -= dx * inverse;
+              separateY -= dy * inverse;
+              separationCount++;
+            }
+          }
+
+          let forceX = 0, forceY = 0;
+          if (neighborCount) {
+            alignX = alignX / neighborCount - boid.vx;
+            alignY = alignY / neighborCount - boid.vy;
+            [alignX, alignY] = clampMagnitude(alignX, alignY, C.MAX_FORCE);
+            forceX += alignX * C.ALIGNMENT_WEIGHT;
+            forceY += alignY * C.ALIGNMENT_WEIGHT;
+
+            cohesionX = cohesionX / neighborCount - boid.x;
+            cohesionY = cohesionY / neighborCount - boid.y;
+            [cohesionX, cohesionY] = clampMagnitude(cohesionX, cohesionY, C.MAX_FORCE);
+            forceX += cohesionX * C.COHESION_WEIGHT;
+            forceY += cohesionY * C.COHESION_WEIGHT;
+          }
+          if (separationCount) {
+            separateX /= separationCount;
+            separateY /= separationCount;
+            [separateX, separateY] = clampMagnitude(separateX, separateY, C.MAX_FORCE * 1.35);
+            forceX += separateX * C.SEPARATION_WEIGHT;
+            forceY += separateY * C.SEPARATION_WEIGHT;
+          }
+
+          // A slowly changing noise heading breaks broad parallel streams while
+          // keeping the movement continuous rather than jittery.
+          const noiseAngle = valueNoise(
+            boid.x * 0.0022 + frame * 0.00035,
+            boid.y * 0.0022,
+            boid.noiseSeed
+          ) * TAU * 2;
+          forceX += Math.cos(noiseAngle) * C.MAX_FORCE * C.WANDER_WEIGHT;
+          forceY += Math.sin(noiseAngle) * C.MAX_FORCE * C.WANDER_WEIGHT;
+
+          boid.ax = forceX;
+          boid.ay = forceY;
+        }
+
+        for (const boid of boids) {
+          boid.vx += boid.ax;
+          boid.vy += boid.ay;
+          [boid.vx, boid.vy] = clampMagnitude(boid.vx, boid.vy, C.MAX_SPEED);
+          boid.x += boid.vx;
+          boid.y += boid.vy;
+
+          // Wrap rather than steer along an edge. This avoids the rectangular
+          // border streams that otherwise reveal the simulation bounds.
+          if (boid.x < 0) boid.x += width;
+          if (boid.x >= width) boid.x -= width;
+          if (boid.y < 0) boid.y += height;
+          if (boid.y >= height) boid.y -= height;
+
+          const sampleDistance = Number.isNaN(boid.lastSampleX)
+            ? Infinity
+            : Math.hypot(boid.x - boid.lastSampleX, boid.y - boid.lastSampleY);
+          if (sampleDistance >= C.SAMPLE_DISTANCE) emitSample(boid);
+        }
+        frame++;
+      };
+
+      const fadeOldFibres = () => {
+        if (C.FADE_ALPHA <= 0 || frame % 2 !== 0) return;
+        ctx.fillStyle = `rgba(${C.BACKGROUND[0]}, ${C.BACKGROUND[1]}, ${C.BACKGROUND[2]}, ${C.FADE_ALPHA})`;
+        ctx.fillRect(0, 0, width, height);
+      };
+
+      const tick = () => {
+        if (!running) return;
+        fadeOldFibres();
+        updateBoids();
+        animationId = requestAnimationFrame(tick);
+      };
+
+      const reset = () => {
+        cancelAnimationFrame(animationId);
+        width = innerWidth;
+        height = innerHeight;
+        dpr = Math.min(devicePixelRatio || 1, 2);
+        canvas.width = Math.round(width * dpr);
+        canvas.height = Math.round(height * dpr);
+        canvas.style.width = `${width}px`;
+        canvas.style.height = `${height}px`;
+        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+        ctx.lineCap = 'round';
+        ctx.fillStyle = `rgb(${C.BACKGROUND.join(',')})`;
+        ctx.fillRect(0, 0, width, height);
+
+        samples = [];
+        spatial = new Map();
+        sampleHead = 0;
+        sampleSerial = 0;
+        frame = 0;
+        createBoids();
+
+        // Pre-accumulate fibres so the first visible frame is already a mesh.
+        for (let i = 0; i < C.WARMUP_STEPS; i++) updateBoids();
+        running = !document.hidden;
+        if (!reducedMotion && running) animationId = requestAnimationFrame(tick);
+      };
+
+      let resizeTimer = 0;
+      addEventListener('resize', () => {
+        clearTimeout(resizeTimer);
+        resizeTimer = setTimeout(reset, 160);
+      }, { passive: true });
+
+      document.addEventListener('visibilitychange', () => {
+        running = !document.hidden;
+        cancelAnimationFrame(animationId);
+        if (running && !reducedMotion) animationId = requestAnimationFrame(tick);
+      });
+
+      reset();
+    })();
+  </script>
+</body>
+</html>
