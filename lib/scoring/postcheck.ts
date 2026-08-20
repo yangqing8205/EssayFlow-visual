@@ -259,15 +259,7 @@ export function recoverV6Report(
     const verified = evidenceFragments(judgement.evidence).filter(quote => sourceContains(sources, quote));
     const hasEvidence = typeof judgement.evidence === "string" && judgement.evidence.trim().length > 0;
     const evidence = verified.length ? verified.join(" / ") : (hasEvidence ? judgement.evidence : UNVERIFIED_EVIDENCE);
-    const baseConstraints = Array.isArray(judgement.constraints)
-      ? judgement.constraints.filter((item): item is string => typeof item === "string")
-      : [];
-    const constraints = baseConstraints.includes(UNVERIFIED_EVIDENCE)
-      ? baseConstraints
-      : (!verified.length && hasEvidence
-        ? [...baseConstraints, UNVERIFIED_EVIDENCE]
-        : baseConstraints);
-    return { ...judgement, evidence, constraints };
+    return { ...judgement, evidence };
   });
   const issues = report.issues.filter(issue => {
     const original = normalizeEvidence(issue.original);

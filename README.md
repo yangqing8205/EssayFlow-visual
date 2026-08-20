@@ -2,20 +2,27 @@
 
 EssayFlow 是一个独立重构的作品集 Demo，不是任何原公司系统或官方产品。它帮助高中生把“一个分数”变成有原文和作文证据支撑、可执行、可复盘的写作反馈。
 
+## 在线体验
+
+- [打开 EssayFlow 正式网站](https://essayflow-v2.vercel.app/)
+- [直接查看脱敏示例评测](https://essayflow-v2.vercel.app/evaluate?demo=1)
+
+线上站点部署于 Vercel。无需安装项目，也不要使用 `localhost` 地址；`localhost:3000` 仅供开发者在自己的电脑上调试。
+
 ## 核心体验
 
 完整主链路为：粘贴完整题目并提交 P1/P2 → 系统自动提取原文和两句段首语 → 用户确认内容边界 → 内容判档与语言档内定分 → 报告 → 修改复评。解决矛盾、文本衔接、主题升华、情节合理性四项内容标准共同决定档位；语言整体表现决定该档内的具体分数。总分 25 分，但不采用“五维各 5 分”相加。
 
 系统严格区分原文、固定首句与学生原创，并以 Zod 验证边界数据。评测先综合四项内容标准判档，再通读学生原创语言的准确性、清晰度、自然度、流畅度、丰富性及叙事支撑效果，决定档内高、中、低位。系统不机械统计硬性错误数量，也不设置审核 Prompt；固定首句始终锁定且不参与语言纠错。
 
-## 本地运行
+## 开发者本地运行
 
 ```bash
 npm install
 npm run dev
 ```
 
-打开 `http://localhost:3000` 是产品介绍首页，`/evaluate` 是评测工作台。
+在本机打开 `http://localhost:3000` 可查看开发环境，`/evaluate` 是评测工作台。该地址只在执行上述命令的电脑上有效，不是公开网站地址。
 
 真实模型接入：复制 `.env.example` 为 `.env.local`，配置 `OPENAI_API_KEY`、`EVALUATION_ACCESS_CODE` 和 `ESSAYFLOW_ALLOWED_ORIGINS`。默认使用 DeepSeek OpenAI-compatible 地址与 `deepseek-v4-flash`，也可通过 `OPENAI_BASE_URL`、`OPENAI_MODEL` 切换兼容提供商。Key 只从服务端环境变量读取，不进入前端、仓库或日志；`/api/provider-status` 只返回“是否已配置”与模型名。
 
@@ -55,7 +62,9 @@ V6 真实评测由四次隔离调用完成，并通过 NDJSON 实时发送阶段
 
 ## 部署
 
-可直接部署到 Vercel 或其他支持 Next.js 的 Node 平台。构建命令 `npm run build`，启动命令 `npm start`。部署环境必须配置 `OPENAI_API_KEY`、`EVALUATION_ACCESS_CODE`、`ESSAYFLOW_ALLOWED_ORIGINS`；建议显式配置 `OPENAI_BASE_URL=https://api.deepseek.com` 与 `OPENAI_MODEL=deepseek-v4-flash`。访问码和模型 Key 只能保存在平台 Secret 中。
+正式网站：[https://essayflow-v2.vercel.app/](https://essayflow-v2.vercel.app/)
+
+项目通过 Vercel 部署，也可运行在其他支持 Next.js 的 Node 平台。构建命令 `npm run build`，启动命令 `npm start`。部署环境必须配置 `OPENAI_API_KEY`、`EVALUATION_ACCESS_CODE`、`ESSAYFLOW_ALLOWED_ORIGINS`；建议显式配置 `OPENAI_BASE_URL=https://api.deepseek.com` 与 `OPENAI_MODEL=deepseek-v4-flash`。访问码和模型 Key 只能保存在平台 Secret 中。
 
 静态原型页默认调用 `http://localhost:3000/api/v6/evaluate`。部署后，在加载页面前设置线上接口地址：
 
