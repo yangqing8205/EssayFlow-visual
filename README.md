@@ -4,12 +4,14 @@ EssayFlow 是一个面向高中英语读后续写场景的 AI 评测产品，也
 
 它不只是给作文一个分数，而是把教师对“矛盾是否解决、上下文是否衔接、主题是否完成、情节是否合理”等隐性判断拆解为可执行的评测规则，让学生获得有原文与作文证据支撑、可修改、可复评的写作反馈。
 
-## 在线体验
+## 评测系统演示
 
-- [打开 EssayFlow 正式网站](https://essayflow-yangqing.vercel.app/)
-- [直接查看脱敏示例评测](https://essayflow-yangqing.vercel.app/evaluate?demo=1)
+> 这是 EssayFlow 的评测系统原型，不是 EssayFlow 正式网站。正式网站请见 [EssayFlow](https://essayflow-yangqing.vercel.app/)。
 
-线上站点部署于 Vercel，无需安装。脱敏示例与真实作文评测会在界面中明确区分。
+- [打开评测系统演示](https://essayflow-v2.vercel.app/)
+- [查看脱敏示例评测](https://essayflow-v2.vercel.app/evaluate?demo=1)
+
+该原型部署于 Vercel，用于验证评测机制。脱敏示例与真实作文评测会在界面中明确区分。
 
 ## 项目概览
 
@@ -71,7 +73,7 @@ EssayFlow 特别处理了 AI 评测中容易被忽略的输入边界、证据可
 
 ## 开发者本地运行
 
-以下内容仅供希望检查或继续开发源码的开发者使用；普通访客请直接打开上方正式网站。
+以下内容仅供希望检查或继续开发源码的开发者使用；普通访客如需了解完整产品体验，请前往上方的 EssayFlow 正式网站。
 
 ```bash
 npm install
@@ -110,6 +112,6 @@ npm run build
 
 ## 部署
 
-正式网站：[https://essayflow-yangqing.vercel.app/](https://essayflow-yangqing.vercel.app/)
+评测系统演示：[https://essayflow-v2.vercel.app/](https://essayflow-v2.vercel.app/)
 
 项目通过 Vercel 部署，也可运行在其他支持 Next.js 的 Node 平台。构建命令为 `npm run build`，启动命令为 `npm start`。部署环境需要配置 `OPENAI_API_KEY`、`EVALUATION_ACCESS_CODE` 与 `ESSAYFLOW_ALLOWED_ORIGINS`；访问码和模型 Key 只能保存在部署平台的 Secret 中。
