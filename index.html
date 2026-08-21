@@ -245,8 +245,10 @@
       display: inline-block;
     }
 
-    .strike-mark{position:absolute;left:-2.5%;top:52%;width:105%;height:18%;overflow:visible;pointer-events:none;transform:translateY(-50%)}
-    .strike-mark path{fill:none;stroke:var(--blue);stroke-linecap:round;stroke-linejoin:round;stroke-width:2.35;pathLength:1;stroke-dasharray:1;stroke-dashoffset:calc(1 - var(--strike-progress,0))}
+    .strike-mark{position:absolute;left:-3.4%;top:56%;width:106.8%;height:22%;overflow:visible;pointer-events:none;transform:translateY(-50%)}
+    .strike-mark path{fill:none;stroke:var(--blue);stroke-linecap:round;stroke-linejoin:round;vector-effect:non-scaling-stroke}
+    .strike-mark .strike-echo{stroke-width:2.2;opacity:.56}
+    .strike-mark .strike-primary{stroke-width:8;opacity:.98}
 
     .concept-copy {
       margin: 72px auto 0;
@@ -1455,7 +1457,7 @@
     .concept-kicker { color:var(--blue); font-size:11px; font-weight:800; letter-spacing:.16em; }
     .concept-word { font-size:clamp(112px,12vw,214px); }
     .concept-word + .concept-word { margin-top:72px; }
-    .strike-mark{top:57%}
+    .strike-mark{top:56%}
     .chapter-title { justify-content:flex-start; padding:0 11%; }
     .chapter-copy { width:min(1180px,100%); padding-top:18vh; }
     .chapter-title h2 { font-size:clamp(44px,4vw,52px); line-height:1.2; letter-spacing:-.045em; }
@@ -1731,7 +1733,7 @@
       <div class="screen concept" id="conceptScreen">
         <div class="concept-inner">
           <p class="concept-kicker reveal">从事件，进入人物</p>
-          <h2 class="concept-word then reveal delay-1" id="thenWord"><span class="strike float-word" tabindex="0">and then?<svg class="strike-mark" viewBox="0 0 1000 100" preserveAspectRatio="none" aria-hidden="true"><path d="M10 64 C162 35 316 43 470 58 C623 73 765 37 990 51"/></svg></span></h2>
+          <h2 class="concept-word then reveal delay-1" id="thenWord"><span class="strike float-word" tabindex="0">and then?<svg class="strike-mark" viewBox="0 0 1000 100" preserveAspectRatio="none" aria-hidden="true"><path class="strike-echo" stroke-dasharray="1200 1200" stroke-dashoffset="1200" d="M12 65 C168 48 309 53 467 60 C627 68 771 45 990 54"/><path class="strike-primary" stroke-dasharray="1200 1200" stroke-dashoffset="1200" d="M9 61 C155 45 317 48 470 58 C626 69 770 41 991 51"/></svg></span></h2>
           <h2 class="concept-word why reveal delay-2" id="whyWord"><span class="float-word" tabindex="0">why?</span></h2>
           <p class="concept-copy reveal delay-3" id="conceptCopy">好的续写不只把故事推向下一件事<br>它让我们看见人物为何行动，以及行动之后发生了什么变化</p>
         </div>
@@ -2249,6 +2251,7 @@
     const conceptStage = document.getElementById('page-2');
     const conceptScreen = document.getElementById('conceptScreen');
     const thenWord = document.getElementById('thenWord');
+    const strikePaths = [...document.querySelectorAll('.strike-mark path')];
     const whyWord = document.getElementById('whyWord');
     const conceptCopy = document.getElementById('conceptCopy');
     const storyImages = [...document.querySelectorAll('.story-image')];
@@ -2373,6 +2376,13 @@
 
       conceptScreen.style.setProperty('--concept-progress', eased);
       conceptScreen.style.setProperty('--strike-progress', strikeProgress);
+      strikePaths.forEach((path) => {
+        const length = path.getTotalLength();
+        const targetOpacity = path.classList.contains('strike-primary') ? .98 : .56;
+        path.style.strokeDasharray = `${length} ${length}`;
+        path.style.strokeDashoffset = `${length * (1 - strikeProgress)}`;
+        path.style.opacity = `${targetOpacity * Math.min(1, strikeProgress * 7)}`;
+      });
       thenWord.style.color = mixColor('#606064', '#e4e4e5', eased);
       whyWord.style.color = mixColor('#d9dfff', '#1847ff', eased);
       conceptCopy.style.color = mixColor('#c1c1c3', '#55565b', eased);
