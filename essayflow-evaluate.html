@@ -17,6 +17,7 @@
       --sans: "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
     }
     * { box-sizing: border-box; }
+    [hidden] { display:none !important; }
     html { background: #fff; }
     body { margin: 0; color: var(--ink); background: #fff; font-family: var(--sans); }
     button, textarea, input { font: inherit; }
@@ -46,18 +47,42 @@
     .count { margin-top: 8px; color: var(--gray-dark); font-size: 12px; text-align: right; }
     .submit-area { display: grid; grid-template-columns: 260px 1fr; gap: 4vw; padding-top: 48px; border-top: 1px solid var(--line); }
     .submit-panel { display: flex; flex-wrap: wrap; align-items: center; gap: 20px; }
-    .submit { padding: 18px 28px; border: 0; color: #fff; background: #aeb7dd; font-weight: 800; cursor: not-allowed; }
+    .submit { padding: 18px 28px; border: 0; color: #fff; background: var(--blue); font-weight: 800; cursor: pointer; transition: opacity .2s, background .2s; }
+    .submit:disabled { background: #aeb7dd; cursor: not-allowed; }
+    .submit:focus-visible { outline: 3px solid rgb(24 71 255 / 20%); outline-offset: 3px; }
     .submit-note { max-width: 560px; color: var(--gray-dark); font-size: 14px; line-height: 1.6; }
     .pipeline { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-top: 38px; }
-    .stage { padding: 16px; border: 1px solid var(--line); color: var(--gray-dark); font-size: 13px; line-height: 1.5; }
+    .stage { position:relative; padding: 16px; border: 1px solid var(--line); color: var(--gray-dark); font-size: 13px; line-height: 1.5; transition:border-color .25s, color .25s, background .25s; }
     .stage b { display: block; margin-bottom: 9px; color: var(--blue); }
-    .result-shell { display:grid; grid-template-columns:260px 1fr; gap:4vw; margin-top:70px; padding:46px 0; border-top:1px solid var(--line); }
-    .result-preview { display:grid; grid-template-columns:220px 1fr; gap:4vw; align-items:start; }
+    .stage.is-running { border-color:var(--blue); color:var(--ink); background:#f6f8ff; }
+    .stage.is-running::after { content:""; position:absolute; left:-1px; bottom:-1px; width:45%; height:2px; background:var(--blue); animation:stagePulse 1.1s ease-in-out infinite alternate; }
+    .stage.is-complete { border-color:#b9c5ff; color:var(--ink); }
+    .stage.is-complete b::after { content:"  完成"; font:700 11px var(--sans); }
+    @keyframes stagePulse { to { width:100%; opacity:.45; } }
+    .evaluation-error { margin-top:20px; padding:15px 18px; border-left:3px solid var(--blue); background:#f6f8ff; color:#333; font-size:14px; line-height:1.6; }
+    .result-shell { display:grid; grid-template-columns:260px 1fr; gap:4vw; margin-top:70px; padding:46px 0; border-top:1px solid var(--line); scroll-margin-top:110px; }
+    .result-preview { display:grid; grid-template-columns:minmax(160px, 220px) minmax(0, 1fr); gap:4vw; align-items:start; width:100%; }
     .result-score { padding-top:16px; border-top:2px solid var(--blue); }
     .result-score strong { display:block; color:var(--blue); font:500 72px/.9 var(--serif); }
     .result-score span { display:block; margin-top:14px; color:var(--gray-dark); }
     .result-lines { border-top:1px solid var(--line); }
     .result-lines span { display:block; height:46px; border-bottom:1px solid var(--line); }
+    .result-content { min-width:0; }
+    .result-copy { width:100%; min-width:0; max-width:900px; }
+    .result-summary { margin:0 0 42px; font:26px/1.55 var(--serif); }
+    .result-warning { margin:-24px 0 36px; color:var(--gray-dark); font-size:14px; line-height:1.7; }
+    .judgements { border-top:1px solid var(--line); }
+    .judgement { display:grid; grid-template-columns:150px 1fr; gap:30px; padding:28px 0; border-bottom:1px solid var(--line); }
+    .judgement-meta { color:var(--blue); font-size:13px; font-weight:800; }
+    .judgement h3 { margin:0 0 12px; font:26px/1.2 var(--serif); }
+    .judgement p { margin:8px 0; color:var(--gray-dark); line-height:1.7; }
+    .judgement blockquote { margin:16px 0 0; padding-left:16px; border-left:2px solid #cbd3ff; color:#30333a; font:17px/1.65 var(--serif); }
+    .language-report { margin-top:42px; padding-top:30px; border-top:2px solid var(--blue); }
+    .language-report h3 { margin:0 0 14px; font:28px/1.2 var(--serif); }
+    .language-report > p { color:var(--gray-dark); line-height:1.75; }
+    .issue { display:grid; grid-template-columns:1fr 1fr; gap:24px; padding:22px 0; border-top:1px solid var(--line); }
+    .issue p { margin:0; line-height:1.65; }
+    .issue .rewrite { color:var(--blue); font-family:var(--serif); }
     .local-state { position: fixed; right: 18px; bottom: 18px; padding: 9px 12px; color: var(--gray-dark); background: rgb(255 255 255 / 92%); border: 1px solid var(--line); font-size: 11px; opacity: 0; transform: translateY(8px); transition: .25s ease; }
     .local-state.show { opacity: 1; transform: none; }
     @media (max-width: 900px) {
@@ -74,16 +99,17 @@
       textarea { padding: 16px; font-size: 16px; }
       .pipeline { grid-template-columns: 1fr; }
       .submit { width: 100%; }
+      .judgement, .issue { grid-template-columns:1fr; gap:10px; }
     }
     @media (prefers-reduced-motion: reduce) { *, *::before, *::after { transition-duration: .01ms !important; } }
   </style>
 </head>
 <body>
-  <header class="topbar"><a href="essayflow-visual-prototype-v2.html#page-32">← 我们怎么判</a><span>EssayFlow</span></header>
+  <header class="topbar"><a href="essayflow-visual-prototype-v2.html#page-32">← 返回阅读案例</a><span>EssayFlow</span></header>
   <main>
     <section class="intro">
       <div><p class="eyebrow">读后续写 · 评测入口</p><h1>换成<br><span style="color:var(--blue)">你的续写</span></h1></div>
-      <div><p class="intro-copy">填写原文、题目给定的两句段落开头，以及你的两段续写。正式版本会依次完成原文事实锁定、线索与主题分析、事实核对和判档。</p><div class="privacy"><b>隐私说明</b><br>当前草稿只保存在你的浏览器本地，不上传、不落库、不用于训练。请勿粘贴姓名、学校、准考证号等个人信息。</div></div>
+      <div><p class="intro-copy">填写原文、题目给定的两句段落开头，以及你的两段续写。EssayFlow 会依次完成原文事实锁定、线索与主题分析、事实核对和判档。</p><div class="privacy"><b>隐私说明</b><br>草稿保存在浏览器本地。点击评测后，原文与续写会发送到 EssayFlow 评分服务及模型提供商进行处理，不做长期存储。请勿输入个人信息。</div></div>
     </section>
 
     <form>
@@ -104,20 +130,29 @@
 
       <section class="submit-area">
         <div class="section-label"><span class="section-number">04</span><h2>开始评测</h2></div>
-        <div><div class="submit-panel"><button class="submit" type="button" disabled>评测服务接入后开放</button><p class="submit-note">这是静态产品入口。真实评测需要服务端串行执行四个阶段，预计等待三四十秒。</p></div><div class="pipeline" aria-label="四阶段评测流程"><div class="stage"><b>01</b>原文既定事实</div><div class="stage"><b>02</b>线索与主题</div><div class="stage"><b>03</b>逐条事实核对</div><div class="stage"><b>04</b>四项判档</div></div></div>
+        <div><div class="submit-panel"><button class="submit" id="evaluateButton" type="button" disabled>开始 EssayFlow 评测</button><p class="submit-note">服务端会真实串行执行四个阶段，通常需要几十秒。每个网络地址每小时可评测 3 次。</p></div><div class="pipeline" aria-label="四阶段评测流程" aria-live="polite"><div class="stage" data-stage="1"><b>01</b>原文既定事实</div><div class="stage" data-stage="2"><b>02</b>线索与主题</div><div class="stage" data-stage="3"><b>03</b>逐条事实核对</div><div class="stage" data-stage="4"><b>04</b>四项判档</div></div><div class="evaluation-error" id="evaluationError" role="alert" aria-live="assertive" hidden></div></div>
       </section>
     </form>
 
-    <section class="result-shell" aria-label="评测结果占位">
-      <div class="section-label"><span class="section-number">05</span><h2>评测结果</h2><p>接入评测服务后，这里将依次呈现内容档位、档内位置、四项判断和原文证据。</p></div>
-      <div class="result-preview" aria-hidden="true"><div class="result-score"><strong>—</strong><span>等待提交续写</span></div><div class="result-lines"><span></span><span></span><span></span><span></span></div></div>
+    <section class="result-shell" id="resultSection" aria-label="评测结果">
+      <div class="section-label"><span class="section-number">05</span><h2>评测结果</h2><p>内容决定档位，语言决定它落在这一档的什么位置。</p></div>
+      <div class="result-preview" id="resultWaiting"><div class="result-score"><strong>—</strong><span>等待提交续写</span></div><div class="result-lines" aria-hidden="true"><span></span><span></span><span></span><span></span></div></div>
+      <div class="result-content" id="resultContent" hidden>
+        <div class="result-preview"><div class="result-score"><strong data-result-score>—</strong><span data-result-band></span></div><div class="result-copy"><p class="result-summary" data-result-summary></p><p class="result-warning" data-result-warning hidden></p><div class="judgements" data-result-judgements></div><section class="language-report"><h3>语言档内位置</h3><p data-language-rationale></p><div data-language-issues></div></section></div></div>
+      </div>
     </section>
   </main>
   <div class="local-state" id="localState" role="status">草稿已保存在本地</div>
   <script>
     const fields = [...document.querySelectorAll('[data-draft]')];
     const state = document.getElementById('localState');
+    const evaluateButton = document.getElementById('evaluateButton');
+    const evaluationError = document.getElementById('evaluationError');
+    const resultSection = document.getElementById('resultSection');
+    const resultWaiting = document.getElementById('resultWaiting');
+    const resultContent = document.getElementById('resultContent');
     const storageKey = 'essayflow-local-draft-v1';
+    const EVALUATION_API_URL = '/api/v6/evaluate';
     let saveTimer;
     try {
       const saved = JSON.parse(localStorage.getItem(storageKey) || '{}');
@@ -138,8 +173,116 @@
       clearTimeout(saveTimer);
       saveTimer = setTimeout(() => state.classList.remove('show'), 1200);
     }
-    fields.forEach((field) => field.addEventListener('input', () => { updateCounts(); saveDraft(); }));
+    function formReady() { return fields.every((field) => field.value.trim().length >= 5); }
+    function updateSubmitState() { evaluateButton.disabled = !formReady(); }
+    function resetStages() {
+      document.querySelectorAll('[data-stage]').forEach((stage) => stage.classList.remove('is-running', 'is-complete'));
+    }
+    function setStage(stageNumber, status) {
+      const stage = document.querySelector(`[data-stage="${stageNumber}"]`);
+      if (!stage) return;
+      stage.classList.toggle('is-running', status === 'running');
+      stage.classList.toggle('is-complete', status === 'complete');
+    }
+    function setBusy(busy) {
+      fields.forEach((field) => { field.disabled = busy; });
+      evaluateButton.disabled = busy || !formReady();
+      evaluateButton.textContent = busy ? 'EssayFlow 正在评测' : '开始 EssayFlow 评测';
+    }
+    function showError(message) {
+      evaluationError.textContent = message;
+      evaluationError.hidden = false;
+    }
+    function appendTextElement(parent, tag, text, className) {
+      const element = document.createElement(tag);
+      if (className) element.className = className;
+      element.textContent = text;
+      parent.appendChild(element);
+      return element;
+    }
+    function renderReport(report) {
+      resultWaiting.hidden = true;
+      resultContent.hidden = false;
+      resultContent.querySelector('[data-result-score]').textContent = report.total;
+      resultContent.querySelector('[data-result-band]').textContent = `${report.level} · ${report.bandRange} · ${report.languagePlacement}`;
+      resultContent.querySelector('[data-result-summary]').textContent = report.summary;
+      const warning = resultContent.querySelector('[data-result-warning]');
+      const constraints = Array.isArray(report.constraints) ? report.constraints : [];
+      warning.hidden = constraints.length === 0;
+      warning.textContent = constraints.join(' ');
+      const judgements = resultContent.querySelector('[data-result-judgements]');
+      judgements.replaceChildren();
+      report.contentJudgements.forEach((item, index) => {
+        const row = appendTextElement(judgements, 'article', '', 'judgement');
+        appendTextElement(row, 'div', `0${index + 1}  ${item.status}`, 'judgement-meta');
+        const copy = appendTextElement(row, 'div', '');
+        appendTextElement(copy, 'h3', item.label);
+        appendTextElement(copy, 'p', item.judgement);
+        appendTextElement(copy, 'blockquote', item.evidence);
+        appendTextElement(copy, 'p', item.suggestion);
+      });
+      resultContent.querySelector('[data-language-rationale]').textContent = report.languageRationale;
+      const issues = resultContent.querySelector('[data-language-issues]');
+      issues.replaceChildren();
+      (report.issues || []).forEach((item) => {
+        const row = appendTextElement(issues, 'article', '', 'issue');
+        const original = appendTextElement(row, 'div', '');
+        appendTextElement(original, 'p', item.original);
+        appendTextElement(original, 'p', `${item.problem}。${item.explanation}`);
+        appendTextElement(row, 'p', item.rewrite, 'rewrite');
+      });
+      resultSection.scrollIntoView({ behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' });
+    }
+    async function parseNdjson(response, onEvent) {
+      if (!response.headers.get('content-type')?.includes('application/x-ndjson')) throw new Error('评分服务返回了无法识别的格式。');
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
+      while (true) {
+        const { value, done } = await reader.read();
+        buffer += decoder.decode(value || new Uint8Array(), { stream: !done });
+        const lines = buffer.split('\n');
+        buffer = lines.pop() || '';
+        lines.filter(Boolean).forEach((line) => onEvent(JSON.parse(line)));
+        if (done) break;
+      }
+      if (buffer.trim()) onEvent(JSON.parse(buffer));
+    }
+    async function evaluateEssay() {
+      evaluationError.hidden = true;
+      resultContent.hidden = true;
+      resultWaiting.hidden = false;
+      resetStages();
+      setBusy(true);
+      try {
+        const values = Object.fromEntries(fields.map((field) => [field.name, field.value.trim()]));
+        const response = await fetch(EVALUATION_API_URL, {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ sourceText: values.source, starter1: values.starter1, studentParagraph1: values.p1, starter2: values.starter2, studentParagraph2: values.p2 }),
+        });
+        if (!response.ok) {
+          const error = await response.json().catch(() => ({}));
+          throw new Error(error.error || `评测请求失败（${response.status}）`);
+        }
+        let receivedResult = false;
+        await parseNdjson(response, (event) => {
+          if (event.type === 'stage') setStage(event.stage, event.status);
+          else if (event.type === 'result') { receivedResult = true; renderReport(event.data); }
+          else if (event.type === 'error') throw new Error(event.message || '评测未完成，请重试。');
+          else throw new Error('评分服务返回了未知事件。');
+        });
+        if (!receivedResult) throw new Error('评测连接提前结束，请重试。');
+      } catch (error) {
+        showError(error instanceof Error ? error.message : '评测未完成，请重试。');
+      } finally {
+        setBusy(false);
+      }
+    }
+    fields.forEach((field) => field.addEventListener('input', () => { updateCounts(); saveDraft(); updateSubmitState(); }));
+    evaluateButton.addEventListener('click', evaluateEssay);
     updateCounts();
+    updateSubmitState();
   </script>
 </body>
 </html>
